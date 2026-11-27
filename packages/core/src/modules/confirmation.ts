@@ -16,7 +16,7 @@ import { attackOf, CONFIRMED_LIKE, type Lead, leadOf } from './leadkind';
 import { reasonCode } from './pilotlearn';
 import { checkRules } from './pilotchecks';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
-import { confirmationAgencies } from './agencies';
+import { agencyNames, confirmationAgencies } from './agencies';
 
 // ---------------------------------------------------------------- sub-pages
 export const CONF_SUBS = {
@@ -196,6 +196,15 @@ export function kfRange(now: number, i: { per: KfInput['per']; from?: string; to
       return { a: day, b: day + DAY };
   }
 }
+/**
+ * « Date de changement de statut » (the owner's rule, 27 Nov 2026): the day an order's CONFIRMATION status changed —
+ * never its last change of any kind (updated_at moves when the depot or the courier touches the order: an order
+ * delivered today was counted as confirmed today). « Date de création »: the day it came in. `alias`: the orders row.
+ */
+const periodSql = (basis: KfInput['basis'], alias: string) =>
+  basis === 'updated'
+    ? `EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = ${alias}.id AND e.kind = 'conf_status' AND e.at >= $1 AND e.at < $2)`
+    : `${alias}.created_at >= $1 AND ${alias}.created_at < $2`;
 const isoT = (t: number) => new Date(t).toISOString();
 const pc = (a: number, b: number) => (b > 0 ? Math.round((a * 100) / b) : null);
 const median = (xs: number[]) => {
@@ -511,10 +520,159 @@ async function firstCall(ctx: Ctx, i: KfInput) {
   };
 }
 
+// ---------------------------------------------------------------- Nouvelles › Statistiques (27 Nov 2026)
+/** A first call that found the client: he answered (confirmed, said no, asked to postpone, out of stock, « never ordered »). */
+const REACHED_FIRST = ['confirmed', 'cancelled', 'postponed', 'no_stock', 'fake'];
+/** First changes that are not a call: an order put back to « Nouvelle » / « À vérifier », or marked as a duplicate. */
+const NOT_A_CALL = ['new', 'to_check', 'duplicate'];
+export interface NvSum {
+  /** orders that came in (duplicates left out) */
+  received: number;
+  /** first calls made */
+  called: number;
+  under5: number;
+  onTime: number;
+  /** minutes, the middle value (null: no call) */
+  median: number | null;
+  /** first calls where the client answered */
+  reached: number;
+  /** first calls that confirmed the order */
+  converted: number;
+}
+export interface NvAgent extends Omit<NvSum, 'received'> {
+  id: number;
+  name: string;
+  /** his orders waiting for their first call past the deadline, now */
+  late: number;
+}
+export interface NvTeam extends NvSum {
+  key: string;
+  kind: 'team' | 'agency';
+  name: string;
+  /** agents who made a first call today (null: an agency — its agents stay private) */
+  agents: number | null;
+  late: number;
+}
+
+/**
+ * Nouvelles › Statistiques (the owner's design, 27 Nov 2026): today only, live, no filters. The first calls made today
+ * (by status change) and the orders that came in today; the same numbers yesterday at the same hour (the arrows); what
+ * waits right now; one line per agent. The store's owner and administrators also get each team side by side — his own
+ * teams, and each confirmation agency as one line whose agents stay private — and the load per agent.
+ */
+async function nouvellesStats(ctx: Ctx) {
+  const now = ctx.now();
+  const calls = await getSetting(ctx.db, 'calls');
+  const day = algiersDayStart(now);
+  const rows = await ctx.db.query(
+    `SELECT id, created_at, assigned_at, agent_id, conf_status, conf_agency_id FROM sales
+      WHERE (created_at >= $1 OR conf_status IN ('new','to_check'))${statsSql(ctx, 'sales')}`,
+    [isoT(day - 3 * DAY)],
+  );
+  const all = rows.map((r: any) => {
+    const created = Date.parse(iso(r.created_at));
+    const assigned = r.agent_id && r.assigned_at ? Date.parse(iso(r.assigned_at)) : null;
+    const r0 = assigned && assigned > created ? assigned : created;
+    return { id: num(r.id), agentId: numOrNull(r.agent_id), agencyId: numOrNull(r.conf_agency_id), created, r: r0, s: workStart(r0, calls), status: r.conf_status as ConfStatus };
+  });
+  const agencyOfOrder = new Map(all.map((o) => [o.id, o.agencyId]));
+  // each order's first call: the first change of its confirmation status made by a person (not a duplicate mark)
+  const first = new Map<number, { at: number; by: number; to: string }>();
+  const idList = all.map((o) => o.id);
+  for (let k = 0; k < idList.length; k += 1000) {
+    const ev = await ctx.db.query(
+      `SELECT DISTINCT ON (order_id) order_id, at, user_id, to_value FROM order_events
+        WHERE kind = 'conf_status' AND user_id IS NOT NULL AND order_id = ANY($1) AND NOT (to_value = ANY($2)) ORDER BY order_id, at`,
+      [idList.slice(k, k + 1000), NOT_A_CALL],
+    );
+    for (const e of ev) first.set(num(e.order_id), { at: Date.parse(iso(e.at)), by: num(e.user_id), to: String(e.to_value ?? '') });
+  }
+  type Call = { at: number; by: number; d: number; ok: boolean; reached: boolean; converted: boolean; agencyId: number | null };
+  const made: Call[] = [];
+  const groups = new Map<string, typeof all>();
+  for (const o of all) {
+    const g = String(o.agentId ?? '');
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g)!.push(o);
+  }
+  for (const g of groups.values())
+    for (const x of g) {
+      const f = first.get(x.id);
+      if (!f) continue;
+      // on time: within the first-call minutes, + the pace for each newer order called before it (as « Appel à temps »)
+      const newer = g.filter((y) => y.r > x.r && y.s <= f.at).length;
+      const due = Math.min(x.s + (calls.firstMinutes + newer * calls.paceMinutes) * MIN, x.s + DAY);
+      made.push({ at: f.at, by: f.by, d: Math.max(0, (f.at - x.s) / MIN), ok: f.at <= due, reached: REACHED_FIRST.includes(f.to), converted: f.to === 'confirmed', agencyId: x.agencyId });
+    }
+  type Ord = (typeof all)[number];
+  const W0 = { a: day, b: now + 1 };
+  const W1 = { a: day - DAY, b: now - DAY + 1 };
+  const sumOf = (cs: Call[], received: number): NvSum => {
+    const ds = cs.map((c) => c.d);
+    return {
+      received,
+      called: cs.length,
+      under5: ds.filter((d) => d <= 5).length,
+      onTime: cs.filter((c) => c.ok).length,
+      median: median(ds),
+      reached: cs.filter((c) => c.reached).length,
+      converted: cs.filter((c) => c.converted).length,
+    };
+  };
+  const inW = (w: { a: number; b: number }, t: number) => t >= w.a && t < w.b;
+  const sum = (w: { a: number; b: number }, keep: (c: Call) => boolean = () => true, keepO: (o: Ord) => boolean = () => true) =>
+    sumOf(made.filter((c) => inW(w, c.at) && keep(c)), all.filter((o) => inW(w, o.created) && o.status !== 'duplicate' && keepO(o)).length);
+  // what waits right now (the orders never called yet)
+  const todo = await loadTodo(ctx.db, queueSql(ctx, 'conf'));
+  const waitingRows = todo.filter((o) => (o.status === 'new' || o.status === 'to_check') && o.attempts === 0 && !o.nextCallAt && !first.has(o.id));
+  const dueW = computeDue(waitingRows, calls, now);
+  const waiting = waitingRows.map((o) => ({ agentId: o.agentId, agencyId: agencyOfOrder.get(o.id) ?? null, late: now > (dueW.get(o.id)!.at ?? o.start) }));
+  // one line per agent: the store's own agents (an agency's agents stay private: never a line here)
+  const who = await names(ctx.db);
+  const today = made.filter((c) => inW(W0, c.at) && c.agencyId === null);
+  const ids = new Set<number>([...today.map((c) => c.by), ...waiting.filter((w) => w.late && w.agentId !== null && w.agencyId === null).map((w) => w.agentId!)]);
+  const agents: NvAgent[] = [...ids]
+    .map((id) => {
+      const x = sumOf(today.filter((c) => c.by === id), 0);
+      return { id, name: who.get(id) ?? '—', called: x.called, under5: x.under5, onTime: x.onTime, median: x.median, reached: x.reached, converted: x.converted, late: waiting.filter((w) => w.late && w.agentId === id).length };
+    })
+    .sort((a, b) => b.called - a.called || a.name.localeCompare(b.name));
+  // the store's owner and administrators: each team side by side, and the load per agent
+  const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
+  let teams: NvTeam[] | null = null;
+  let perAgent: { orders: number; agents: number } | null = null;
+  if (director) {
+    const own = new Set(today.map((c) => c.by));
+    perAgent = { orders: all.filter((o) => inW(W0, o.created) && o.status !== 'duplicate' && o.agencyId === null).length, agents: own.size };
+    const T = await getSetting(ctx.db, 'teams');
+    const A = await agencyNames(ctx);
+    teams = [
+      ...T.map((t) => {
+        const m = new Set<number>([...(t.managerId ? [t.managerId] : []), ...t.agentIds]);
+        const s = sum(W0, (c) => c.agencyId === null && m.has(c.by), (o) => o.agencyId === null && o.agentId !== null && m.has(o.agentId));
+        return { key: `t${t.id}`, kind: 'team' as const, name: t.name, ...s, agents: [...own].filter((id) => m.has(id)).length, late: waiting.filter((w) => w.late && w.agencyId === null && w.agentId !== null && m.has(w.agentId)).length };
+      }),
+      ...A.map((a) => {
+        const s = sum(W0, (c) => c.agencyId === a.id, (o) => o.agencyId === a.id);
+        return { key: `a${a.id}`, kind: 'agency' as const, name: a.name, ...s, agents: null, late: waiting.filter((w) => w.late && w.agencyId === a.id).length };
+      }),
+    ].filter((x) => x.kind === 'team' || x.received || x.called);
+  }
+  return {
+    firstMinutes: calls.firstMinutes,
+    today: sum(W0),
+    prev: sum(W1),
+    live: { waiting: waiting.length, late: waiting.filter((w) => w.late).length, noAgent: waiting.filter((w) => w.agentId === null).length },
+    agents,
+    director,
+    perAgent,
+    teams,
+  };
+}
+
 async function periodNew(ctx: Ctx, i: KfInput) {
   const R = kfRange(ctx.now(), i);
-  const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
-  const O = await ctx.db.query(`SELECT id, conf_status, attempts, agent_id, total FROM sales WHERE ${col} >= $1 AND ${col} < $2${statsSql(ctx, 'sales')}`, [isoT(R.a), isoT(R.b)]);
+  const O = await ctx.db.query(`SELECT id, conf_status, attempts, agent_id, total FROM sales WHERE ${periodSql(i.basis, 'sales')}${statsSql(ctx, 'sales')}`, [isoT(R.a), isoT(R.b)]);
   const news = O.filter((o: any) => o.conf_status === 'new' || o.conf_status === 'to_check');
   const called = O.filter((o: any) => num(o.attempts) > 0 || !['new', 'to_check'].includes(o.conf_status));
   const conf = O.filter((o: any) => o.conf_status === 'confirmed').length;
@@ -749,9 +907,8 @@ async function overview(ctx: Ctx, i: KfInput) {
   const now = ctx.now();
   const R = kfRange(now, i);
   const calls = await getSetting(ctx.db, 'calls');
-  const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
   const all = await ctx.db.query(
-    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value, came, next_call_at FROM sales WHERE ${col} >= $1 AND ${col} < $2${statsSql(ctx, 'sales')}`,
+    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value, came, next_call_at FROM sales WHERE ${periodSql(i.basis, 'sales')}${statsSql(ctx, 'sales')}`,
     [isoT(R.a), isoT(R.b)],
   );
   // abandoned carts (leadkind.ts): on their own line; in the team's numbers only once confirmed
@@ -1236,6 +1393,8 @@ export const confirmationProcs = {
 
   // ---- statistics (managers)
   'confirmation.firstCall': proc([...MGR], KfInput, (ctx, i) => firstCall(ctx, i)),
+  /** Nouvelles › Statistiques: today only, live, no filters (the owner's design, 27 Nov 2026). */
+  'confirmation.nouvelles': proc([...MGR], z.object({}), (ctx) => nouvellesStats(ctx)),
   'confirmation.period': proc([...MGR], KfInput, (ctx, i) => periodNew(ctx, i)),
   'confirmation.delivery': proc([...MGR], KfInput.extend({ on: z.enum(['created', 'confirmed']).default('created') }), (ctx, i) => deliveryPerf(ctx, i)),
   'confirmation.enCours': proc([...MGR], KfInput, (ctx, i) => enCours(ctx, i)),

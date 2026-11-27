@@ -7,7 +7,7 @@ import i18n from 'i18next';
 import { useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
 import { da, dur, n } from '../../lib/format';
-import { ErrorBox, Help, Icon, Kpi, Loading } from '../../ui/kit';
+import { ErrorBox, Help, Icon, Kpi, Loading, Trend } from '../../ui/kit';
 import { kfInput, Kf, loadKf, saveKf, Sub } from './shared';
 import { useNow } from './Countdown';
 import { DateRange, periodLabel } from './DateRange';
@@ -26,7 +26,7 @@ export function StatsSection({ sub }: { sub: Sub }) {
   };
   if (sub === 'terminees' || sub === 'livrees') return null;
   const fold = (o: boolean) => (setOpen(o), store.set('px-kff', o ? '1' : '0'));
-  if (sub === 'nouvelles') return <NouvellesStats kf={kf} setKf={setKf} open={open} setOpen={fold} />;
+  if (sub === 'nouvelles') return <NouvellesStats open={open} setOpen={fold} />;
   return (
     <section className={`px-kff px-kff-one ${open ? '' : 'folded'}`}>
       <button
@@ -85,77 +85,227 @@ function Head({ title, help, children }: { title: string; help: string; children
 
 const perLabel = (t: (k: string) => string, kf: Kf) => periodLabel(t, i18n.language || 'fr', kf);
 
-// ---------------------------------------------------------------- Nouvelles: one foldable card
-const PERS = ['today', 'yesterday', '7', '30', 'month', 'custom'] as const;
+// ---------------------------------------------------------------- Nouvelles: today only, live, no filters
+/**
+ * Nouvelles › Statistiques (the owner's design, 27 Nov 2026): today only, live, no filters — the one stats page without
+ * them. The team's first calls today (volume, speed, result) with an arrow against yesterday at the same hour, what
+ * waits right now, and one line per agent. The store's owner and administrators also get the load per agent and each
+ * team side by side (an agency is one line: its agents stay private).
+ */
+const useNv = (open: boolean) => useRpc('confirmation.nouvelles', {}, { refetchInterval: 30_000, enabled: open });
+type Nv = NonNullable<ReturnType<typeof useNv>['data']>;
+type NvS = Nv['today'];
+const pOf = (a: number, b: number) => (b > 0 ? Math.round((a * 100) / b) : null);
+/** the change in points between two % (null when one is missing) */
+const dPts = (a: number | null, b: number | null) => (a === null || b === null ? null : (a - b) / 100);
 
-/** Nouvelles › Statistiques: one card with a fold arrow, the date filters under its header, and six numbers. */
-function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) => void; open: boolean; setOpen: (o: boolean) => void }) {
+/** ▲ / ▼ in minutes against yesterday at the same hour (fewer minutes is better). */
+function MinTrend({ v }: { v: number | null }) {
   const { t } = useTranslation();
-  // this box always counts by status change, on the chosen dates only
-  const q = useRpc('confirmation.firstCall', { ...kfInput(kf), basis: 'updated' }, { refetchInterval: 30_000, enabled: open });
-  const now = useNow();
-  const D = q.data;
-  const set = (p: Partial<Kf>) => setKf({ ...kf, ...p });
-  const fm = D?.firstMinutes ?? 15;
-  const onTime = D && D.called ? Math.round((D.onTime * 100) / D.called) : null;
-  const f5 = D && D.called ? Math.round((D.under5 * 100) / D.called) : null;
-  const age = D?.oldest ? Math.max(0, now - Date.parse(D.oldest.since)) : null;
-  const med = D?.medianMin ?? null;
+  if (v === null || !isFinite(v)) return null;
+  const r = Math.round(v);
+  const good = r === 0 ? null : r < 0;
   return (
-    <section className={`card px-st ${open ? '' : 'folded'}`}>
+    <span className={`kpi-tr ${good === null ? '' : good ? 'good' : 'bad'}`} title={t('confirmation.nv.vsPrev')}>
+      {r === 0 ? '=' : r > 0 ? '▲' : '▼'} {Math.abs(r)} min
+    </span>
+  );
+}
+
+function NouvellesStats({ open, setOpen }: { open: boolean; setOpen: (o: boolean) => void }) {
+  const { t } = useTranslation();
+  const q = useNv(open);
+  const D = q.data;
+  return (
+    <section className={`card px-st px-nv ${open ? '' : 'folded'}`}>
       <button type="button" className="px-st-head" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="px-st-t">{t('confirmation.stats.title')}</span>
         {open && (
           <span className="bjfc-live">
             <i />
-            {t('confirmation.fc.live')}
+            {t('confirmation.nv.todayLive')}
           </span>
         )}
         <svg className="px-st-ch" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
         </svg>
       </button>
-      {open && (
-        <>
-          <div className="px-st-filters">
-            <DateRange kf={kf} onChange={set} />
-            <span className="muted small">{t('confirmation.stats.byStatusChange')}</span>
-          </div>
-          {q.error ? (
-            <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-          ) : !D ? (
-            <Loading />
-          ) : (
-            <div className="px-st-grid">
-              <Kpi
-                tone={D.waiting ? 'warn' : undefined}
-                icon="hourglass" label={t('confirmation.fc.waiting')}
-                help={t('confirmation.kh.waiting')}
-                value={n(D.waiting)}
-                sub={D.waiting ? (D.waitingNoAgent ? t('confirmation.fc.noAgent', { n: D.waitingNoAgent }) : t('confirmation.fc.allAssigned')) : t('confirmation.fc.nobody')}
-              />
-              <Kpi tone={D.late ? 'bad' : undefined} help={t('confirmation.kh.late', { first: fm })} icon="alert" label={t('confirmation.fc.lateNow')} value={n(D.late)} sub={D.late ? t('confirmation.fc.lateSub') : t('confirmation.fc.noLate')} />
-              <Kpi
-                tone={age === null ? undefined : age > fm * 60_000 ? 'bad' : age > fm * 30_000 ? 'warn' : undefined}
-                icon="timer" label={t('confirmation.fc.oldest')}
-                help={t('confirmation.kh.oldest')}
-                value={age === null ? '—' : dur(age)}
-                sub={D.oldest ? `${D.oldest.ref} · ${D.oldest.name}` : t('confirmation.fc.nobody')}
-              />
-              <Kpi tone={tone3(onTime, 80, 70)} help={t('confirmation.kh.onTime', { first: fm })} icon="check" rate={onTime === null ? null : onTime / 100} label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
-              <Kpi
-                tone={med === null ? undefined : med <= fm ? 'ok' : med <= fm * 2 ? 'warn' : 'bad'}
-                icon="sliders" label={t('confirmation.fc.median')}
-                help={t('confirmation.kh.median')}
-                value={med === null ? '—' : dur(med * 60_000)}
-                sub={D.called ? t('confirmation.fc.medianSub') : perLabel(t, kf)}
-              />
-              <Kpi tone={tone3(f5, 50, 25)} help={t('confirmation.kh.under5')} icon="sparkles" rate={f5 === null ? null : f5 / 100} label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
-            </div>
-          )}
-        </>
-      )}
+      {open && (q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !D ? <Loading /> : <NvBody D={D} />)}
     </section>
+  );
+}
+
+function NvBody({ D }: { D: Nv }) {
+  const { t } = useTranslation();
+  const T = D.today;
+  const P = D.prev;
+  const fm = D.firstMinutes;
+  const u5 = pOf(T.under5, T.called);
+  const ot = pOf(T.onTime, T.called);
+  const re = pOf(T.reached, T.called);
+  const cv = pOf(T.converted, T.called);
+  const vs = t('confirmation.nv.vsPrev');
+  const recTrend = P.received > 0 ? (T.received - P.received) / P.received : null;
+  const per = D.perAgent && D.perAgent.agents > 0 ? Math.round(D.perAgent.orders / D.perAgent.agents) : null;
+  return (
+    <div className="px-nv-body">
+      <p className="px-nv-sec">{t(D.director ? 'confirmation.nv.secAll' : 'confirmation.nv.secTeam')}</p>
+      <div className="px-nv-grp">
+        <div className={`px-nv-g ${D.director ? 'g2' : 'g1'}`}>
+          <span className="px-nv-gh">{t('confirmation.nv.gVolume')}</span>
+          <div className="px-nv-gt">
+            <Kpi icon="inbox" label={t('confirmation.nv.received')} value={n(T.received)} sub={t('confirmation.nv.receivedSub')} trend={<Trend v={recTrend} vs={vs} />} />
+            {D.director && <Kpi icon="users" label={t('confirmation.nv.perAgent')} help={t('confirmation.nv.hPerAgent')} value={per === null ? '—' : n(per)} sub={t('confirmation.nv.perAgentSub', { n: D.perAgent?.agents ?? 0 })} />}
+          </div>
+        </div>
+        <div className="px-nv-g g3">
+          <span className="px-nv-gh">{t('confirmation.nv.gSpeed')}</span>
+          <div className="px-nv-gt">
+            <Kpi big tone={tone3(u5, 80, 60)} icon="sparkles" label={t('confirmation.nv.under5')} help={t('confirmation.kh.under5')} value={pctTxt(u5)} rate={u5 === null ? null : u5 / 100} sub={t('confirmation.nv.goal', { v: 80 })} trend={<Trend v={dPts(u5, pOf(P.under5, P.called))} pts vs={vs} />} />
+            <Kpi tone={T.median === null ? undefined : T.median <= 5 ? 'ok' : T.median <= fm ? 'warn' : 'bad'} icon="timer" label={t('confirmation.nv.median')} help={t('confirmation.kh.median')} value={T.median === null ? '—' : dur(T.median * 60_000)} sub={t('confirmation.nv.medianSub')} trend={<MinTrend v={T.median === null || P.median === null ? null : T.median - P.median} />} />
+            <Kpi tone={tone3(ot, 95, 85)} icon="check" label={t('confirmation.nv.onTime')} help={t('confirmation.kh.onTime', { first: fm })} value={pctTxt(ot)} sub={t('confirmation.nv.goal', { v: 95 })} trend={<Trend v={dPts(ot, pOf(P.onTime, P.called))} pts vs={vs} />} />
+          </div>
+        </div>
+        <div className="px-nv-g g2">
+          <span className="px-nv-gh">{t('confirmation.nv.gResult')}</span>
+          <div className="px-nv-gt">
+            <Kpi icon="phone" label={t('confirmation.nv.reached')} help={t('confirmation.nv.hReached')} value={pctTxt(re)} sub={t('confirmation.nv.reachedSub')} trend={<Trend v={dPts(re, pOf(P.reached, P.called))} pts vs={vs} />} />
+            <Kpi icon="check" label={t('confirmation.nv.converted')} help={t('confirmation.nv.hConverted')} value={pctTxt(cv)} sub={t('confirmation.nv.convertedSub')} trend={<Trend v={dPts(cv, pOf(P.converted, P.called))} pts vs={vs} />} />
+          </div>
+        </div>
+      </div>
+      <p className="px-nv-sec">{t('confirmation.nv.now')}</p>
+      <div className="px-nv-now">
+        <Kpi icon="hourglass" label={t('confirmation.fc.waiting')} value={n(D.live.waiting)} sub={D.live.waiting ? t('confirmation.nv.waitingSub') : t('confirmation.fc.nobody')} />
+        <Kpi tone={D.live.late ? 'bad' : undefined} icon="alert" label={t('confirmation.fc.lateNow')} help={t('confirmation.kh.late', { first: fm })} value={n(D.live.late)} sub={D.live.late ? t('confirmation.fc.lateSub') : t('confirmation.fc.noLate')} />
+        <Kpi tone={D.live.noAgent ? 'warn' : undefined} icon="user" label={t('confirmation.nv.noAgent')} value={n(D.live.noAgent)} sub={D.live.noAgent ? t('confirmation.nv.noAgentSub') : t('confirmation.fc.allAssigned')} />
+      </div>
+      <NvAgents D={D} />
+      {D.director && D.teams && D.teams.length > 0 && <NvTeams D={D} />}
+    </div>
+  );
+}
+
+/** Each agent today: the same numbers as the team; the team line adds up every call (never an average of agents). */
+function NvAgents({ D }: { D: Nv }) {
+  const { t } = useTranslation();
+  const T = D.today;
+  const teamRe = pOf(T.reached, T.called);
+  const teamCv = pOf(T.converted, T.called);
+  const cols = ['cCalled', 'cUnder5', 'cMedian', 'cOnTime', 'cReached', 'cConverted', 'cLate'] as const;
+  const head = (k: (typeof cols)[number]) => t(`confirmation.nv.${k}`);
+  const row = (a: Omit<NvS, 'received'> & { late: number }, few: boolean) => {
+    const u5 = pOf(a.under5, a.called);
+    const re = pOf(a.reached, a.called);
+    const cv = pOf(a.converted, a.called);
+    const half = (p: number | null, team: number | null) => !few && p !== null && team !== null && team > 0 && p < team / 2;
+    return [
+      <td key="c" className="num ltr" data-l={head('cCalled')}>{n(a.called)}</td>,
+      <td key="u" className={`num ltr${!few && u5 !== null && u5 < 60 ? ' px-nv-bad' : ''}`} data-l={head('cUnder5')}>{pctTxt(u5)}</td>,
+      <td key="m" className={`num ltr${!few && a.median !== null && a.median > 5 ? ' px-nv-bad' : ''}`} data-l={head('cMedian')}>{a.median === null ? '—' : dur(a.median * 60_000)}</td>,
+      <td key="o" className="num ltr" data-l={head('cOnTime')}>{pctTxt(pOf(a.onTime, a.called))}</td>,
+      <td key="r" className={`num ltr${half(re, teamRe) ? ' px-nv-bad' : ''}`} data-l={head('cReached')} title={half(re, teamRe) ? t('confirmation.nv.flag') : undefined}>
+        {half(re, teamRe) && <Icon name="flag" />} {pctTxt(re)}
+      </td>,
+      <td key="v" className={`num ltr${half(cv, teamCv) ? ' px-nv-bad' : ''}`} data-l={head('cConverted')}>{pctTxt(cv)}</td>,
+      <td key="l" className={`num ltr${a.late ? ' px-nv-bad' : ''}`} data-l={head('cLate')}>{n(a.late)}</td>,
+    ];
+  };
+  return (
+    <div className="px-nv-tw">
+      <p className="px-nv-sec">{t('confirmation.nv.byAgent')}</p>
+      <div className="tbl-wrap">
+        <table className="tbl px-ov-tbl px-nv-tbl">
+          <thead>
+            <tr>
+              <th>{t('confirmation.col.agent')}</th>
+              {cols.map((k) => (
+                <th key={k} className="num">{head(k)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {D.agents.length ? (
+              D.agents.map((a) => {
+                const few = a.called < 20;
+                return (
+                  <tr key={a.id} className={few ? 'px-nv-few' : undefined} title={few ? t('confirmation.nv.few') : undefined}>
+                    <td data-l={t('confirmation.col.agent')}><b>{a.name}</b></td>
+                    {row(a, few)}
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={cols.length + 1} className="empty">{t('confirmation.nv.empty')}</td>
+              </tr>
+            )}
+          </tbody>
+          {D.agents.length > 1 && (
+            <tfoot>
+              <tr>
+                <td data-l={t('confirmation.col.agent')}><b>{t('confirmation.nv.teamRow')}</b></td>
+                {row({ ...T, late: D.agents.reduce((s, a) => s + a.late, 0) }, true)}
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      <p className="px-nv-note">{t('confirmation.nv.rules')}</p>
+    </div>
+  );
+}
+
+/** The store's owner: each team side by side, and each agency as one line (its agents stay private). */
+function NvTeams({ D }: { D: Nv }) {
+  const { t } = useTranslation();
+  const rows = D.teams ?? [];
+  const avg = D.perAgent && D.perAgent.agents > 0 ? D.perAgent.orders / D.perAgent.agents : null;
+  const cols = ['cAgents', 'cNew', 'cPerAgent', 'cUnder5', 'cMedian', 'cConverted', 'cLate'] as const;
+  const head = (k: (typeof cols)[number]) => t(`confirmation.nv.${k}`);
+  return (
+    <div className="px-nv-tw">
+      <p className="px-nv-sec">{t('confirmation.nv.byTeam')}</p>
+      <div className="tbl-wrap">
+        <table className="tbl px-ov-tbl px-nv-tbl">
+          <thead>
+            <tr>
+              <th>{t('confirmation.nv.cTeam')}</th>
+              {cols.map((k) => (
+                <th key={k} className="num">{head(k)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const per = r.agents ? Math.round(r.received / r.agents) : null;
+              const u5 = pOf(r.under5, r.called);
+              const load = per === null || avg === null ? '' : per > avg * 1.3 ? ' px-nv-bad' : per < avg * 0.7 ? ' px-nv-light' : '';
+              return (
+                <tr key={r.key}>
+                  <td data-l={t('confirmation.nv.cTeam')}>
+                    <b>{r.name}</b> {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
+                  </td>
+                  <td className="num" data-l={head('cAgents')}>
+                    {r.agents === null ? (
+                      <span className="muted"><Icon name="lock" /> {t('confirmation.nv.private')}</span>
+                    ) : (
+                      <span className="ltr">{n(r.agents)}</span>
+                    )}
+                  </td>
+                  <td className="num ltr" data-l={head('cNew')}>{n(r.received)}</td>
+                  <td className={`num ltr${load}`} data-l={head('cPerAgent')}>{per === null ? '—' : n(per)}</td>
+                  <td className={`num ltr${u5 !== null && u5 < 60 ? ' px-nv-bad' : ''}`} data-l={head('cUnder5')}>{pctTxt(u5)}</td>
+                  <td className={`num ltr${r.median !== null && r.median > 5 ? ' px-nv-bad' : ''}`} data-l={head('cMedian')}>{r.median === null ? '—' : dur(r.median * 60_000)}</td>
+                  <td className="num ltr" data-l={head('cConverted')}>{pctTxt(pOf(r.converted, r.called))}</td>
+                  <td className={`num ltr${r.late ? ' px-nv-bad' : ''}`} data-l={head('cLate')}>{n(r.late)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
