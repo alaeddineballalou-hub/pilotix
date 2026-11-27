@@ -8,6 +8,8 @@ import { before, test } from 'node:test';
 import { DEFAULT_MANAGEMENT_PLAN, payPeriodAt } from '@pilotix/shared';
 import { call, Ctx, Db } from '../index';
 import { payLedger } from '../modules/pay';
+import { setRaw } from '../modules/admin';
+import { getSetting } from '../settings';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -16,6 +18,7 @@ let admin: Ctx;
 let zr: number;
 let confPlan: number;
 let suiviPlan: number;
+let leadPlan: number;
 const H = 3_600_000;
 const D = 24 * H;
 const cal = { every: 'half' as const };
@@ -33,16 +36,18 @@ before(async () => {
   const noUp = { enabled: false, method: 'qty', rate: 0, trigger: 'delivered', ruleVersion: 2 };
   confPlan = await plan('Confirmation · 100 par livrée', { ...DEFAULT_MANAGEMENT_PLAN, agentTask: 'confirmation', method: 'fixed', rate: 100, trigger: 'delivered', monthly: 0, upsell: noUp });
   suiviPlan = await plan('Suivi · 40 par livrée', { ...DEFAULT_MANAGEMENT_PLAN, agentTask: 'suivi', method: 'fixed', rate: 40, trigger: 'delivered', monthly: 0, upsell: noUp });
+  leadPlan = await plan('Superviseur · 20 par livrée', { ...DEFAULT_MANAGEMENT_PLAN, agentTask: 'superviseur', method: 'fixed', rate: 20, trigger: 'delivered', monthly: 0, upsell: noUp });
 });
 
 let n = 0;
 /** a new person with a plan since 60 days */
-async function person(task: 'confirmation' | 'suivi'): Promise<number> {
+async function person(task: 'confirmation' | 'suivi' | 'superviseur'): Promise<number> {
   n++;
+  const role = task === 'superviseur' ? 'agent_manager' : task;
   const id = Number(
-    (await db.query(`INSERT INTO profiles (name, email, password_hash, roles) VALUES ($1, $2, 'x', $3) RETURNING id`, [`Agent ${task} ${n}`, `paie-${task}-${n}@test.pilotix.dz`, `{${task}}`]))[0].id,
+    (await db.query(`INSERT INTO profiles (name, email, password_hash, roles) VALUES ($1, $2, 'x', $3) RETURNING id`, [`Agent ${task} ${n}`, `paie-${task}-${n}@test.pilotix.dz`, `{${role}}`]))[0].id,
   );
-  const planId = task === 'confirmation' ? confPlan : suiviPlan;
+  const planId = task === 'confirmation' ? confPlan : task === 'suivi' ? suiviPlan : leadPlan;
   const p = (await db.query('SELECT name, configuration FROM management_payment_plans WHERE id = $1', [planId]))[0];
   await db.query('INSERT INTO pay_plan_terms (profile_id, task, plan_id, name, configuration, effective_at) VALUES ($1,$2,$3,$4,$5,$6)', [
     id,
@@ -130,6 +135,19 @@ test('paid, then no longer delivered: a minus line in the open period, for the c
   const ev = (await db.query(`SELECT data FROM order_events WHERE order_id = $1 AND kind = 'follow_status' AND to_value = 'delivered' ORDER BY at DESC, id DESC LIMIT 1`, [a]))[0];
   const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
   assert.equal(Date.parse(data.prev.da), t1);
+});
+
+test('a team leader paid for his team\'s delivery gives it back too', async () => {
+  const agent = await person('confirmation');
+  const leader = await person('superviseur');
+  const teams = await getSetting(db, 'teams');
+  await setRaw(db, 'teams', [...teams, { id: `t-pay-${leader}`, name: 'Équipe test', managerId: leader, agentIds: [agent] }]);
+  const g = await delivered(agent, null, lastPeriod(6));
+  await payAll(leader);
+  await setFollow(admin, { ids: [g], status: 'failed', reason: 'Refusée' });
+  const v = await view(leader);
+  assert.deepEqual(linesOf(v, g), [{ kind: 'correction', amount: -20 }]);
+  assert.equal(v.rows.find((r: any) => r.orderId === g).agent, `Agent confirmation ${n - 1}`, 'it says whose order it was');
 });
 
 test('not paid yet, then no longer delivered: the order just leaves the pay (no minus line)', async () => {

@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { payPeriodAt, type PayCalendar } from '@pilotix/shared';
 import type { Out } from '../../lib/backend';
-import { da, when } from '../../lib/format';
+import { da, daKeep, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Help, Icon, Loading } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
@@ -244,8 +244,8 @@ function PaySheet({ b, f, onClose }: { b: Board; f: PayFor; onClose: () => void 
                   <b>{period(x.from, x.to)}</b>
                   <small>
                     {t('paie.earnedSub', { count: x.orders, upsells: x.upsells })}
-                    {x.back > 0 ? ` · ${t('paie.minusBack', { v: da(x.back) })}` : ''}
-                    {x.acomptes > 0 ? ` · ${t('paie.minusAcompte', { v: da(x.acomptes) })}` : ''}
+                    {x.back > 0 ? ` · ${t('paie.minusBack', { v: daKeep(x.back) })}` : ''}
+                    {x.acomptes > 0 ? ` · ${t('paie.minusAcompte', { v: daKeep(x.acomptes) })}` : ''}
                   </small>
                 </div>
                 <b className="ltr pp-amt">{da(x.net)}</b>

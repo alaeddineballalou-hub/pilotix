@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { planPriceBrackets, type PayTask } from '@pilotix/shared';
 import { inAgency, payOn } from '../../lib/features';
-import { da, n, when } from '../../lib/format';
+import { da, daKeep, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
@@ -146,8 +146,8 @@ export function Summary({ d }: { d: PayMine }) {
         <b className="ltr">{da(d.open.earned)}</b>
         <small>
           {t('paie.earnedSub', { count: d.open.orders, upsells: d.open.upsells })}
-          {d.open.back > 0 ? ` · ${t('paie.minusBack', { v: da(d.open.back) })}` : ''}
-          {d.open.acomptes > 0 ? ` · ${t('paie.minusAcompte', { v: da(d.open.acomptes) })}` : ''} · {t('paie.payDay', { d: payDay(d.open.to) })}
+          {d.open.back > 0 ? ` · ${t('paie.minusBack', { v: daKeep(d.open.back) })}` : ''}
+          {d.open.acomptes > 0 ? ` · ${t('paie.minusAcompte', { v: daKeep(d.open.acomptes) })}` : ''} · {t('paie.payDay', { d: payDay(d.open.to) })}
         </small>
       </div>
       <div className="pp-cell">

@@ -13,6 +13,8 @@ const nf = (opts: Intl.NumberFormatOptions = {}) => {
 
 /** 12 900 DA / 12 900 د.ج */
 export const da = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${nf().format(v)} ${i18n.language === 'ar' ? 'د.ج' : 'DA'}`);
+/** an amount inside a sentence: never cut between the number and its currency (« −80 » / « DA ») */
+export const daKeep = (v: number | null | undefined) => da(v).replace(/ (?=\S+$)/, '\u00a0');
 export const n = (v: number | null | undefined) => (v === null || v === undefined ? '—' : nf().format(v));
 /** 1.25 → 1,3 (one decimal, for small averages) */
 export const dec1 = (v: number | null | undefined) => (v === null || v === undefined || !isFinite(v) ? '—' : nf({ maximumFractionDigits: 1 }).format(v));
