@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 import { useRpc } from '../../lib/query';
 import { store } from '../../lib/store';
-import { da, dur, n } from '../../lib/format';
+import { da, dec1, dur, n } from '../../lib/format';
 import { ErrorBox, Help, Icon, Kpi, Loading } from '../../ui/kit';
 import { kfInput, Kf, loadKf, saveKf, Sub } from './shared';
 import { useNow } from './Countdown';
@@ -27,6 +27,7 @@ export function StatsSection({ sub }: { sub: Sub }) {
   if (sub === 'terminees' || sub === 'livrees') return null;
   const fold = (o: boolean) => (setOpen(o), store.set('px-kff', o ? '1' : '0'));
   if (sub === 'nouvelles') return <NouvellesStats open={open} setOpen={fold} />;
+  if (sub === 'attente') return <EnCoursStats open={open} setOpen={fold} />;
   return (
     <section className={`px-kff px-kff-one ${open ? '' : 'folded'}`}>
       <button
@@ -44,7 +45,6 @@ export function StatsSection({ sub }: { sub: Sub }) {
       </button>
       {open && (
         <div className="px-kff-body">
-          {sub === 'attente' && <EnCoursCard kf={kf} setKf={setKf} />}
           {sub === 'confirmees' && <ConfirmedCard kf={kf} setKf={setKf} />}
         </div>
       )}
@@ -101,13 +101,13 @@ const minTxt = (m: number | null) => (m === null ? '—' : dur(m * 60_000));
 
 /** The line under a tile's number: its change since yesterday at the same hour — a count (gray), points or minutes
  *  (green: better, red: worse). */
-function Arrow({ v, unit, goodDown }: { v: number | null; unit: 'n' | 'pts' | 'min'; goodDown?: boolean }) {
+function Arrow({ v, unit, goodDown }: { v: number | null; unit: 'n' | 'pts' | 'min' | 'dec'; goodDown?: boolean }) {
   const { t } = useTranslation();
   if (v === null || !isFinite(v)) return null;
-  const r = Math.round(v);
+  const r = unit === 'dec' ? Math.round(v * 10) / 10 : Math.round(v);
   if (r === 0) return <div className="d eq">= {t('confirmation.nv.same')}</div>;
   const better = unit === 'n' ? null : goodDown ? r < 0 : r > 0;
-  const size = unit === 'pts' ? t('confirmation.nv.pts', { count: Math.abs(r) }) : unit === 'min' ? `${Math.abs(r)} min` : n(Math.abs(r));
+  const size = unit === 'pts' ? t('confirmation.nv.pts', { count: Math.abs(r) }) : unit === 'min' ? `${Math.abs(r)} min` : unit === 'dec' ? dec1(Math.abs(r)) : n(Math.abs(r));
   return (
     <div className={`d ${better === null ? 'eq' : better ? 'up' : 'dn'}`}>
       {r > 0 ? '↑' : '↓'} <span className="ltr">{size}</span>
@@ -115,10 +115,13 @@ function Arrow({ v, unit, goodDown }: { v: number | null; unit: 'n' | 'pts' | 'm
   );
 }
 
-function Tile({ label, value, gl, d, main, warn }: { label: string; value: string; gl?: string; d?: ReactNode; main?: boolean; warn?: boolean }) {
+function Tile({ label, help, value, gl, d, main, warn }: { label: string; help?: string; value: string; gl?: string; d?: ReactNode; main?: boolean; warn?: boolean }) {
   return (
     <div className={`px-sx-tile${main ? ' main' : ''}${warn ? ' warn' : ''}`}>
-      <div className="lb">{label}</div>
+      <div className="lb">
+        {label}
+        {help && <Help text={help} label={label} />}
+      </div>
       <div className="v ltr">{value}</div>
       {gl && <div className="gl">{gl}</div>}
       {d}
@@ -126,11 +129,11 @@ function Tile({ label, value, gl, d, main, warn }: { label: string; value: strin
   );
 }
 
-/** A group of tiles (Volume, Vitesse, Résultat): as wide as its tiles (150 px at least each: else the next group goes
- *  under, so a label never breaks). */
-function Group({ title, size, children }: { title: string; size: number; children: ReactNode }) {
+/** A group of tiles (Volume, Vitesse, Résultat): as wide as its tiles (`min` px at least each: else the next group goes
+ *  under, so a label and its « ? » never break). */
+function Group({ title, size, min = 140, children }: { title: string; size: number; min?: number; children: ReactNode }) {
   return (
-    <div style={{ flex: `${size} 1 ${size * 150 + (size - 1) * 10}px` }}>
+    <div style={{ flex: `${size} 1 ${size * min + (size - 1) * 8}px` }}>
       <div className="px-sx-gh">{title}</div>
       <div className="px-sx-gt">{children}</div>
     </div>
@@ -177,25 +180,25 @@ function NvBody({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
         <span>{D.team ? t('confirmation.nv.secOne', { team: D.team.name }) : t(dir ? 'confirmation.nv.secAll' : 'confirmation.nv.secTeam')}</span>
       </div>
       <div className="px-sx-grp">
-        <Group title={t('confirmation.nv.gVolume')} size={dir ? 2 : 1}>
-          <Tile label={t('confirmation.nv.received')} value={n(T.received)} gl={t(dir ? 'confirmation.nv.today' : 'confirmation.nv.cameIn')} d={<Arrow v={T.received - P.received} unit="n" />} />
-          {dir && <Tile label={t('confirmation.nv.perAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} d={<Arrow v={dOf(per, load(D.perAgentPrev))} unit="n" />} />}
+        <Group title={t('confirmation.nv.gVolume')} size={dir ? 2 : 1} min={168}>
+          <Tile label={t('confirmation.nv.received')} help={t('confirmation.nv.hReceived')} value={n(T.received)} gl={t(dir ? 'confirmation.nv.today' : 'confirmation.nv.cameIn')} d={<Arrow v={T.received - P.received} unit="n" />} />
+          {dir && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.nv.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} d={<Arrow v={dOf(per, load(D.perAgentPrev))} unit="n" />} />}
         </Group>
         <Group title={t('confirmation.nv.gSpeed')} size={3}>
-          <Tile main label={t('confirmation.nv.under5')} value={pctTxt(u5)} gl={t('confirmation.nv.goal', { v: 80 })} d={<Arrow v={dOf(u5, pOf(P.under5, P.called))} unit="pts" />} />
-          <Tile label={t(dir ? 'confirmation.nv.medianShort' : 'confirmation.nv.median')} value={minTxt(T.median)} gl={t('confirmation.nv.halfFaster')} d={<Arrow v={dOf(T.median, P.median)} unit="min" goodDown />} />
-          <Tile label={t('confirmation.nv.onTime')} value={pctTxt(ot)} gl={t('confirmation.nv.goal', { v: 95 })} d={<Arrow v={dOf(ot, pOf(P.onTime, P.called))} unit="pts" />} />
+          <Tile main label={t('confirmation.nv.under5')} help={t('confirmation.nv.hUnder5')} value={pctTxt(u5)} gl={t('confirmation.nv.goal', { v: 80 })} d={<Arrow v={dOf(u5, pOf(P.under5, P.called))} unit="pts" />} />
+          <Tile label={t(dir ? 'confirmation.nv.medianShort' : 'confirmation.nv.median')} help={t('confirmation.nv.hMedian')} value={minTxt(T.median)} gl={t('confirmation.nv.halfFaster')} d={<Arrow v={dOf(T.median, P.median)} unit="min" goodDown />} />
+          <Tile label={t('confirmation.nv.onTime')} help={t('confirmation.nv.hOnTime')} value={pctTxt(ot)} gl={t('confirmation.nv.goal', { v: 95 })} d={<Arrow v={dOf(ot, pOf(P.onTime, P.called))} unit="pts" />} />
         </Group>
         <Group title={t('confirmation.nv.gResult')} size={2}>
-          <Tile label={t('confirmation.nv.reached')} value={pctTxt(re)} gl={t('confirmation.nv.at1st')} d={<Arrow v={dOf(re, pOf(P.reached, P.called))} unit="pts" />} />
-          <Tile label={t('confirmation.nv.converted')} value={pctTxt(cv)} gl={t('confirmation.nv.at1st')} d={<Arrow v={dOf(cv, pOf(P.converted, P.called))} unit="pts" />} />
+          <Tile label={t('confirmation.nv.reached')} help={t('confirmation.nv.hReached')} value={pctTxt(re)} gl={t('confirmation.nv.at1st')} d={<Arrow v={dOf(re, pOf(P.reached, P.called))} unit="pts" />} />
+          <Tile label={t('confirmation.nv.converted')} help={t('confirmation.nv.hConverted')} value={pctTxt(cv)} gl={t('confirmation.nv.at1st')} d={<Arrow v={dOf(cv, pOf(P.converted, P.called))} unit="pts" />} />
         </Group>
       </div>
       <div className="px-sx-sec">{t(dir ? 'confirmation.nv.nowAll' : 'confirmation.nv.now')}</div>
       <div className="px-sx-t3">
-        <Tile label={t('confirmation.nv.waiting')} value={n(D.live.waiting)} />
-        <Tile warn={D.live.late > 0} label={t('confirmation.nv.late')} value={n(D.live.late)} />
-        <Tile warn={D.live.noAgent > 0} label={t('confirmation.nv.noAgent')} value={n(D.live.noAgent)} />
+        <Tile label={t('confirmation.nv.waiting')} help={t('confirmation.nv.hWaiting')} value={n(D.live.waiting)} />
+        <Tile warn={D.live.late > 0} label={t('confirmation.nv.late')} help={t('confirmation.nv.hLate')} value={n(D.live.late)} />
+        <Tile warn={D.live.noAgent > 0} label={t('confirmation.nv.noAgent')} help={t('confirmation.nv.hNoAgent')} value={n(D.live.noAgent)} />
       </div>
       {dir ? <NvTeams D={D} onTeam={onTeam} /> : <NvAgents D={D} />}
     </div>
@@ -339,123 +342,242 @@ function NvTeams({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
   );
 }
 
-// ---------------------------------------------------------------- En cours: one card, like Confirmées
+// ---------------------------------------------------------------- En cours: today only, live, no filters
 /**
- * En cours › Statistiques. Same card and dropdowns as Confirmées (period, date type, indicator).
- * "À traiter maintenant" is live (every order of the tab, whatever the dates); "Performance" and the
- * agent table follow the dropdowns; "Performance de livraison" shows what became of the confirmed orders.
+ * En cours › Statistiques, drawn as the owner's sketches (27 Nov 2026, « Agent manager view — En cours » and « Teams
+ * director view — En cours » PDFs): today only, live, no filters. The job of En cours is to reach the client, not to
+ * convince him: the call backs made today and how many on time, the share of today's closed orders where the client was
+ * reached (the main number) and the calls it took, how those orders ended, what is in progress right now, then one line
+ * per agent — or, for the store's owner and administrators, one line per team (a team opens its manager view).
  */
-function EnCoursCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
+const useEc = (open: boolean, team: string | null) => useRpc('confirmation.enCours', team ? { team } : {}, { refetchInterval: 30_000, enabled: open });
+type Ec = NonNullable<ReturnType<typeof useEc>['data']>;
+type EcS = Ec['today'];
+const ecReached = (s: EcS) => s.confirmed + s.saidNo;
+const ecTries = (s: EcS) => (ecReached(s) > 0 ? s.tries / ecReached(s) : null);
+
+function EnCoursStats({ open, setOpen }: { open: boolean; setOpen: (o: boolean) => void }) {
   const { t } = useTranslation();
-  const q = useRpc('confirmation.enCours', kfInput(kf), { refetchInterval: 30_000, enabled: kf.view === 'conf' });
-  const now = useNow();
+  const [team, setTeam] = useState<string | null>(null);
+  const q = useEc(open, team);
   const D = q.data;
-  const L = (k: string) => t(`confirmation.ek.col.${k}`);
-  const badge = (p: number | null, ok: number, warn: number) => <span className={`badge t-${tone3(p, ok, warn) ?? 'off'} ltr`}>{pctTxt(p)}</span>;
-  let body: ReactNode = <Loading />;
-  if (kf.view === 'deliv') body = <DelivBody kf={kf} on="confirmed" />;
-  else if (q.error) body = <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-  else if (D) {
-    const lateAge = D.lateOldest ? Math.max(0, now - Date.parse(D.lateOldest.since)) : null;
-    const nextIn = D.nextLater ? Math.max(0, Date.parse(D.nextLater.at) - now) : null;
-    const early = Math.max(0, D.cancelled - D.complete);
-    body = (
-      <div>
-        <div className="bjec-sec">{t('confirmation.ek.secLive')}</div>
-        <div className="kpis">
-          <Kpi tone={D.dueNow ? 'warn' : undefined} label={t('confirmation.ek.due')} help={t('confirmation.ek.dueHelp')} value={n(D.dueNow)} sub={t('confirmation.ek.dueSub', { n: D.count })} />
-          <Kpi
-            tone={D.late ? 'bad' : undefined}
-            label={t('confirmation.ek.late')}
-            help={t('confirmation.ek.lateHelp')}
-            value={n(D.late)}
-            sub={D.lateOldest && lateAge !== null ? t('confirmation.ek.lateSub', { d: dur(lateAge), ref: D.lateOldest.ref }) : t('confirmation.ek.lateNone')}
-          />
-          <Kpi
-            label={t('confirmation.ek.later')}
-            help={t('confirmation.ek.laterHelp')}
-            value={n(D.later)}
-            sub={D.nextLater && nextIn !== null ? t('confirmation.ek.laterSub', { d: dur(nextIn), ref: D.nextLater.ref }) : t('confirmation.ek.laterNone')}
-          />
-          <Kpi label={t('confirmation.ek.value')} help={t('confirmation.ek.valueHelp')} value={da(D.value)} sub={t('confirmation.ek.valueSub', { n: D.count })} />
-        </div>
-        <div className="bjec-sec">
-          {t('confirmation.ek.secPerf')} · {perLabel(t, kf)}
-        </div>
-        <div className="kpis">
-          <Kpi tone={tone3(D.confRate, 60, 40)} label={t('confirmation.ek.conf')} help={t('confirmation.ek.confHelp')} value={pctTxt(D.confRate)} sub={t('confirmation.ek.confSub', { c: D.confirmed, x: D.cancelled })} />
-          <Kpi tone={tone3(D.recoveryRate, 60, 40)} label={t('confirmation.ek.rec')} help={t('confirmation.ek.recHelp')} value={pctTxt(D.recoveryRate)} sub={t('confirmation.ek.recSub', { r: D.recovered, l: D.lost })} />
-          <Kpi
-            tone={tone3(D.completeRate, 100, 80)}
-            label={t('confirmation.ek.full')}
-            help={t('confirmation.ek.fullHelp')}
-            value={pctTxt(D.completeRate)}
-            sub={D.cancelled ? t('confirmation.ek.fullSub', { c: D.complete, n: D.cancelled }) : t('confirmation.ek.fullNone')}
-          />
-          <Kpi tone={early ? 'bad' : D.cancelled ? 'ok' : undefined} label={t('confirmation.ek.early')} help={t('confirmation.ek.earlyHelp')} value={n(early)} sub={t('confirmation.ek.earlySub')} />
-        </div>
-        <h3>{t('confirmation.ek.byAgent')}</h3>
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>{L('agent')}</th>
-                <th className="num">{L('n')}</th>
-                <th className="num">{L('due')}</th>
-                <th className="num">{L('late')}</th>
-                <th className="num">{L('conf')}</th>
-                <th className="num">{L('rec')}</th>
-                <th className="num">{L('full')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {D.byAgent.length ? (
-                D.byAgent.map((a) => (
-                  <tr key={a.agentId ?? 0}>
-                    <td data-l={L('agent')}>
-                      <b>{a.name ?? t('confirmation.noAgent')}</b>
-                    </td>
-                    <td className="num ltr" data-l={L('n')}>
-                      {n(a.n)}
-                    </td>
-                    <td className="num ltr" data-l={L('due')}>
-                      {a.due ? <b>{n(a.due)}</b> : '0'}
-                    </td>
-                    <td className="num" data-l={L('late')}>
-                      <span className={`badge t-${a.late ? 'bad' : 'off'} ltr`}>{n(a.late)}</span>
-                    </td>
-                    <td className="num" data-l={L('conf')}>
-                      {badge(a.confRate, 60, 40)}
-                    </td>
-                    <td className="num" data-l={L('rec')}>
-                      {badge(a.recoveryRate, 60, 40)}
-                    </td>
-                    <td className="num" data-l={L('full')}>
-                      {badge(a.completeRate, 100, 80)}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="empty">
-                    {t('confirmation.ek.empty')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="muted small px-ek-legend">{t('confirmation.ek.legend')}</p>
-      </div>
-    );
-  }
   return (
-    <div className="card bjkfc bjek">
-      <Head title={t('confirmation.ek.title')} help={t('confirmation.ek.help')}>
-        <KfBar kf={kf} setKf={setKf} />
-      </Head>
-      {body}
+    <section className={`card px-st px-nv ${open ? '' : 'folded'}`}>
+      <button type="button" className="px-st-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="px-st-t">{t('confirmation.stats.title')}</span>
+        <svg className="px-st-ch" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
+        </svg>
+      </button>
+      {open && (q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !D ? <Loading /> : <EcBody D={D} onTeam={setTeam} />)}
+    </section>
+  );
+}
+
+function EcBody({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
+  const { t } = useTranslation();
+  const T = D.today;
+  const P = D.prev;
+  const dir = D.director;
+  const ot = pOf(T.onTime, T.calls);
+  const re = pOf(ecReached(T), ecReached(T) + T.never);
+  const tr = ecTries(T);
+  const trP = ecTries(P);
+  const closed = ecReached(T) + T.never;
+  const per = D.perAgent && D.perAgent.agents > 0 ? Math.round(D.perAgent.orders / D.perAgent.agents) : null;
+  return (
+    <div className="px-sx">
+      <div className="px-sx-sec first">
+        {D.team && (
+          <button type="button" className="px-sx-back" onClick={() => onTeam(null)}>
+            ‹ {t('confirmation.nv.allTeams')}
+          </button>
+        )}
+        <span>{D.team ? t('confirmation.nv.secOne', { team: D.team.name }) : t(dir ? 'confirmation.nv.secAll' : 'confirmation.nv.secTeam')}</span>
+      </div>
+      <div className="px-sx-grp">
+        <Group title={t('confirmation.nv.gVolume')} size={1}>
+          <Tile label={t('confirmation.ec.calls')} help={t('confirmation.ec.hCalls')} value={n(T.calls)} gl={t('confirmation.ec.callsSub')} d={<Arrow v={T.calls - P.calls} unit="n" />} />
+        </Group>
+        <Group title={t('confirmation.nv.gSpeed')} size={1}>
+          <Tile label={t('confirmation.ec.onTime')} help={t('confirmation.ec.hOnTime')} value={pctTxt(ot)} gl={t('confirmation.nv.goal', { v: 90 })} d={<Arrow v={dOf(ot, pOf(P.onTime, P.calls))} unit="pts" />} />
+        </Group>
+        <Group title={t('confirmation.nv.gResult')} size={2}>
+          <Tile main label={t('confirmation.ec.reached')} help={t('confirmation.ec.hReached')} value={pctTxt(re)} gl={t('confirmation.ec.reachedSub')} d={<Arrow v={dOf(re, pOf(ecReached(P), ecReached(P) + P.never))} unit="pts" />} />
+          <Tile label={t('confirmation.ec.tries')} help={t('confirmation.ec.hTries')} value={tr === null ? '—' : dec1(tr)} gl={t('confirmation.ec.triesSub')} d={<Arrow v={tr === null || trP === null ? null : tr - trP} unit="dec" goodDown />} />
+        </Group>
+      </div>
+      <div className="px-sx-sec">{t(dir ? 'confirmation.ec.endedAll' : 'confirmation.ec.ended', { count: closed })}</div>
+      <EcBar s={T} />
+      <div className="px-sx-sec">{t(dir ? 'confirmation.nv.nowAll' : 'confirmation.nv.now')}</div>
+      <div className={dir ? 'px-sx-t4' : 'px-sx-t3'}>
+        <Tile label={t('confirmation.ec.inProgress')} help={t('confirmation.ec.hInProgress')} value={n(D.live.inProgress)} gl={t('confirmation.ec.worth', { v: da(D.live.value) })} />
+        {dir && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.ec.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} />}
+        <Tile warn={D.live.late > 0} label={t('confirmation.ec.late')} help={t('confirmation.ec.hLate')} value={n(D.live.late)} />
+        <Tile label={t('confirmation.ec.dueHour')} help={t('confirmation.ec.hDueHour')} value={n(D.live.dueHour)} />
+      </div>
+      {dir ? <EcTeams D={D} onTeam={onTeam} /> : <EcAgents D={D} />}
     </div>
+  );
+}
+
+/** How today's closed orders ended: confirmed and « the client said no » (both reached), never reached. */
+function EcBar({ s }: { s: EcS }) {
+  const { t } = useTranslation();
+  const all = ecReached(s) + s.never;
+  if (!all) return <p className="px-sx-empty">{t('confirmation.ec.noClosed')}</p>;
+  const w = (x: number) => `${(x * 100) / all}%`;
+  const parts = [
+    ['confirmed', s.confirmed, 'c'],
+    ['saidNo', s.saidNo, 'x'],
+    ['never', s.never, 'n'],
+  ] as const;
+  return (
+    <div className="px-sx-bar">
+      <div className="px-sx-brk">
+        <div style={{ width: w(ecReached(s)) }}>{t('confirmation.ec.barReached', { p: pctTxt(pOf(ecReached(s), all)) })}</div>
+        {s.never > 0 && <div style={{ width: w(s.never) }}>{t('confirmation.ec.barNot', { p: pctTxt(pOf(s.never, all)) })}</div>}
+      </div>
+      <div className="px-sx-track">
+        {parts.map(([k, v, c]) => (v > 0 ? <div key={k} className={c} style={{ width: w(v) }} /> : null))}
+      </div>
+      <div className="px-sx-lgd">
+        {parts.map(([k, v, c]) => (
+          <span key={k}>
+            <i className={c} />
+            {t(`confirmation.ec.${k}`)} <span className="ltr">{pctTxt(pOf(v, all))}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Each agent today; « Équipe » adds up the lines (never an average of agents). */
+function EcAgents({ D }: { D: Ec }) {
+  const { t } = useTranslation();
+  const cols = ['cCalls', 'cOnTime', 'cLate', 'cReached', 'cTries'] as const;
+  const head = (k: (typeof cols)[number]) => t(`confirmation.ec.${k}`);
+  const cells = (a: EcS & { late: number }, judge: boolean, lateRed: boolean) => {
+    const ot = pOf(a.onTime, a.calls);
+    const re = pOf(ecReached(a), ecReached(a) + a.never);
+    const tr = ecTries(a);
+    const bad = (b: boolean) => (b ? ' bad' : '');
+    return [
+      <td key="c" className="num ltr" data-l={head('cCalls')}>{n(a.calls)}</td>,
+      <td key="o" className={`num ltr${bad(judge && ot !== null && ot < 75)}`} data-l={head('cOnTime')}>{pctTxt(ot)}</td>,
+      <td key="l" className={`num ltr${bad(lateRed && a.late > 0)}`} data-l={head('cLate')}>{n(a.late)}</td>,
+      <td key="r" className={`num ltr${bad(judge && re !== null && re < 65)}`} data-l={head('cReached')}>{pctTxt(re)}</td>,
+      <td key="t" className="num ltr" data-l={head('cTries')}>{tr === null ? '—' : dec1(tr)}</td>,
+    ];
+  };
+  return (
+    <>
+      <div className="px-sx-sec">{t('confirmation.nv.byAgent')}</div>
+      <div className="tbl-wrap">
+        <table className="tbl px-ov-tbl px-sx-tbl">
+          <thead>
+            <tr>
+              <th>{t('confirmation.nv.cAgent')}</th>
+              {cols.map((k) => (
+                <th key={k} className="num">{head(k)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {D.agents.length ? (
+              D.agents.map((a) => {
+                const few = a.calls < 20;
+                return (
+                  <tr key={a.id} className={few ? 'few' : undefined} title={few ? t('confirmation.nv.few') : undefined}>
+                    <td data-l={t('confirmation.nv.cAgent')}>{a.name}</td>
+                    {cells(a, !few, true)}
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={cols.length + 1} className="empty">{t('confirmation.ec.empty')}</td>
+              </tr>
+            )}
+            {D.agents.length > 1 && (
+              <tr className="tot">
+                <td data-l={t('confirmation.nv.cAgent')}>{t('confirmation.nv.teamRow')}</td>
+                {cells({ ...D.agentsTotal, late: D.agents.reduce((s, a) => s + a.late, 0) }, false, false)}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+/** The store's owner: each team side by side (an agency is one line, its agents private); a team opens its manager
+ *  view; « Toutes les équipes » adds the lines up. */
+function EcTeams({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
+  const { t } = useTranslation();
+  const rows = D.teams ?? [];
+  const avg = D.perAgent && D.perAgent.agents > 0 ? D.perAgent.orders / D.perAgent.agents : null;
+  const cols = ['cAgents', 'cInProgress', 'cPerAgent', 'cOnTime', 'cLate', 'cReached', 'cTriesShort'] as const;
+  const head = (k: (typeof cols)[number]) => t(k === 'cAgents' || k === 'cPerAgent' ? `confirmation.nv.${k}` : `confirmation.ec.${k}`);
+  type Row = NonNullable<Ec['allTeams']>;
+  const cells = (r: Row, judge: boolean, per: number | null) => {
+    const ot = pOf(r.onTime, r.calls);
+    const re = pOf(ecReached(r), ecReached(r) + r.never);
+    const tr = ecTries(r);
+    const bad = (b: boolean) => (judge && b ? ' bad' : '');
+    const lo = judge && per !== null && avg !== null ? (per > avg * 1.3 ? ' bad' : per < avg * 0.7 ? ' lt' : '') : '';
+    return [
+      <td key="a" className="num" data-l={head('cAgents')}>
+        {r.agents === null ? <span className="muted">{t('confirmation.nv.private')}</span> : <span className="ltr">{n(r.agents)}</span>}
+      </td>,
+      <td key="i" className="num ltr" data-l={head('cInProgress')}>{n(r.inProgress)}</td>,
+      <td key="p" className={`num ltr${lo}`} data-l={head('cPerAgent')}>{per === null ? '—' : n(per)}</td>,
+      <td key="o" className={`num ltr${bad(ot !== null && ot < 75)}`} data-l={head('cOnTime')}>{pctTxt(ot)}</td>,
+      <td key="l" className={`num ltr${bad(r.late > 0)}`} data-l={head('cLate')}>{n(r.late)}</td>,
+      <td key="r" className={`num ltr${bad(re !== null && re < 65)}`} data-l={head('cReached')}>{pctTxt(re)}</td>,
+      <td key="t" className="num ltr" data-l={head('cTriesShort')}>{tr === null ? '—' : dec1(tr)}</td>,
+    ];
+  };
+  return (
+    <>
+      <div className="px-sx-sec">{t('confirmation.nv.byTeam')}</div>
+      <div className="tbl-wrap">
+        <table className="tbl px-ov-tbl px-sx-tbl">
+          <thead>
+            <tr>
+              <th>{t('confirmation.nv.cTeam')}</th>
+              {cols.map((k) => (
+                <th key={k} className="num">{head(k)}</th>
+              ))}
+              <th aria-hidden="true" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const go = r.kind === 'team';
+              return (
+                <tr key={r.key} className={go ? 'go' : undefined} onClick={go ? () => onTeam(r.key) : undefined}>
+                  <td data-l={t('confirmation.nv.cTeam')}>
+                    {r.name} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
+                  </td>
+                  {cells(r, true, r.agents ? Math.round(r.inProgress / r.agents) : null)}
+                  <td className="go" aria-hidden="true">{go ? '›' : ''}</td>
+                </tr>
+              );
+            })}
+            {D.allTeams && (
+              <tr className="tot">
+                <td data-l={t('confirmation.nv.cTeam')}>{t('confirmation.nv.allTeams')}</td>
+                {cells(D.allTeams, false, avg === null ? null : Math.round(avg))}
+                <td aria-hidden="true" />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

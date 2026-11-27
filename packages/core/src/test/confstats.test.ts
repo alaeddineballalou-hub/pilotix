@@ -83,3 +83,38 @@ test('Nouvelles › Statistiques: today only, the team adds up its agents, a man
   const other: any = await call('confirmation.nouvelles', await at(EMAILS.manager, now), { team: 't999' });
   assert.equal(other.team, null);
 });
+
+test('En cours › Statistiques: today only, the closed orders add up, a manager gets no team table', async () => {
+  const now = Date.now();
+  await assert.rejects(call('confirmation.enCours', await at(EMAILS.conf, now), {}), /Accès refusé/);
+  for (const who of ['vendeur', 'manager'] as const) {
+    const s: any = await call('confirmation.enCours', await at(EMAILS[who], now), {});
+    for (const k of ['today', 'prev'] as const) {
+      const x = s[k];
+      assert.ok(x.onTime <= x.calls, `${who} ${k}: on time ⊂ calls`);
+      // each order reached took one call at least (its first call) and one more (it was in En cours)
+      assert.ok(x.tries >= 2 * (x.confirmed + x.saidNo), `${who} ${k}: 2 calls at least to reach in En cours`);
+    }
+    assert.ok(s.live.late <= s.live.inProgress && s.live.dueHour + s.live.late <= s.live.inProgress);
+    const t = s.agentsTotal;
+    assert.equal(t.calls, s.agents.reduce((n: number, a: any) => n + a.calls, 0), `${who}: the team line adds up its agents`);
+    assert.equal(t.confirmed + t.saidNo + t.never, s.agents.reduce((n: number, a: any) => n + a.confirmed + a.saidNo + a.never, 0));
+    assert.ok(t.calls <= s.today.calls);
+    if (who === 'manager') {
+      assert.equal(s.director, false);
+      assert.equal(s.teams, null, 'a manager never sees the other teams');
+    } else {
+      assert.equal(s.director, true);
+      for (const r of s.teams) if (r.kind === 'agency') assert.equal(r.agents, null, "an agency's agents stay private");
+      assert.equal(s.allTeams.calls, s.teams.reduce((n: number, r: any) => n + r.calls, 0));
+      assert.equal(s.allTeams.inProgress, s.teams.reduce((n: number, r: any) => n + r.inProgress, 0));
+      const first = s.teams.find((r: any) => r.kind === 'team');
+      if (first) {
+        const one: any = await call('confirmation.enCours', await at(EMAILS.vendeur, now), { team: first.key });
+        assert.equal(one.director, false);
+        assert.equal(one.team.key, first.key);
+        assert.ok(one.live.inProgress <= s.live.inProgress);
+      }
+    }
+  }
+});

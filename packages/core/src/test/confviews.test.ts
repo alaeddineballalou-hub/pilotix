@@ -23,12 +23,12 @@ test('En cours › Statistiques count the orders of the En cours list, for the o
   for (const who of ['vendeur', 'manager'] as const) {
     const ctx = await at(EMAILS[who], now);
     const list: any = await call('confirmation.list', ctx, { sub: 'attente', pageSize: 5 });
-    const st: any = await call('confirmation.enCours', ctx, KF);
-    assert.equal(st.count, list.total, `${who}: the numbers are his list's`);
+    const st: any = await call('confirmation.enCours', ctx, {});
+    assert.equal(st.live.inProgress, list.total, `${who}: the numbers are his list's`);
   }
-  const owner: any = await call('confirmation.enCours', await at(EMAILS.vendeur, now), KF);
-  const mgr: any = await call('confirmation.enCours', await at(EMAILS.manager, now), KF);
-  assert.ok(mgr.count < owner.count, 'a manager never counts another team');
+  const owner: any = await call('confirmation.enCours', await at(EMAILS.vendeur, now), {});
+  const mgr: any = await call('confirmation.enCours', await at(EMAILS.manager, now), {});
+  assert.ok(mgr.live.inProgress < owner.live.inProgress, 'a manager never counts another team');
 });
 
 test('Nouvelles › Statistiques: a manager sees his team and the orders no agent has yet, never another team', async () => {

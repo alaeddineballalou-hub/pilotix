@@ -4,7 +4,7 @@ import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO,
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
-import { getSetting, setSetting } from '../settings';
+import { getSetting, setSetting, type SettingsMap } from '../settings';
 import { ConfInput, dueNowSql, getOrder, highestGridFee, holdOrder, lineGrids, ListInput, listOrders, setConf, teamMembers, triedSince, withClientScores } from './orders';
 import { agencyLead, agencyOf, andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
@@ -12,7 +12,7 @@ import { assignedProductIds } from './productscope';
 import { readMontage } from './montage';
 import { rotateTimes } from './assign';
 import { CART_CAME, cartLeftOut, teamCountsSql } from './carts';
-import { attackOf, CONFIRMED_LIKE, type Lead, leadOf } from './leadkind';
+import { attackOf, AUTO_NO_ANSWER, CONFIRMED_LIKE, type Lead, leadOf } from './leadkind';
 import { reasonCode } from './pilotlearn';
 import { checkRules } from './pilotchecks';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
@@ -556,6 +556,19 @@ export interface NvTeam extends NvSum {
   unassigned: number | null;
 }
 
+type Teams = SettingsMap['teams'];
+/**
+ * A team the director (the store's owner, an administrator) opened from his teams table: what its manager sees in his
+ * lists (confSeeSql) — his agents' orders and the ones no agent has yet. No team opened: everything in view.
+ */
+function teamView(T: Teams, key: string | undefined) {
+  const opened = key ? T.find((t) => `t${t.id}` === key) ?? null : null;
+  const membersOf = (t: Teams[number]) => new Set<number>([...(t.managerId ? [t.managerId] : []), ...t.agentIds]);
+  const mine = opened ? membersOf(opened) : null;
+  const inView = (agentId: number | null, _agencyId: number | null) => !mine || agentId === null || mine.has(agentId);
+  return { opened, membersOf, inView };
+}
+
 /**
  * Nouvelles › Statistiques, as the owner's sketches (27 Nov 2026, « Agent manager view » and « Teams director view »):
  * today only, live, no filters. The first calls made today (by status change) and the orders that came in today; the
@@ -569,11 +582,7 @@ async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
   const day = algiersDayStart(now);
   const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
   const T = director ? await getSetting(ctx.db, 'teams') : [];
-  // a team opened by the director: what its manager sees (his agents' orders and the ones no agent has yet)
-  const opened = director && i.team ? T.find((t) => `t${t.id}` === i.team) ?? null : null;
-  const membersOf = (t: (typeof T)[number]) => new Set<number>([...(t.managerId ? [t.managerId] : []), ...t.agentIds]);
-  const mine = opened ? membersOf(opened) : null;
-  const inView = (agentId: number | null, agencyId: number | null) => !mine || (agencyId === null && (agentId === null || mine.has(agentId)));
+  const { opened, membersOf, inView } = teamView(T, director ? i.team : undefined);
   const rows = await ctx.db.query(
     `SELECT id, created_at, assigned_at, agent_id, conf_status, conf_agency_id FROM sales
       WHERE (created_at >= $1 OR conf_status IN ('new','to_check'))${statsSql(ctx, 'sales')}`,
@@ -728,6 +737,252 @@ async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
   };
 }
 
+// ---------------------------------------------------------------- En cours › Statistiques (27 Nov 2026)
+/** The confirmation statuses of the « En cours » tab: an order called once already, waiting for another call. */
+const EN_COURS = CONF_SUBS.attente as readonly string[];
+/** How an order leaves En cours: confirmed (also « sans stock »), cancelled, a fake, a wrong number. */
+const EC_CLOSED = ['confirmed', 'no_stock', 'cancelled', 'fake', 'wrong_number'];
+/** A call back (« Rappel », « Reportée ») is on time until 30 minutes after the time picked: the list's call window. */
+const CALLBACK_WINDOW = 30 * MIN;
+const HOUR = 60 * MIN;
+/** Closed without ever reaching the client: cancelled after the tries with no answer (or « injoignable »), a wrong number. */
+const neverReached = (to: string, note: string | null) =>
+  to === 'wrong_number' || (to === 'cancelled' && (AUTO_NO_ANSWER.test(note ?? '') || reasonCode(note) === 'unreachable' || /^\s*(pas de r[ée]ponse|no answer)/i.test(note ?? '')));
+/** The call slot after the one `t` is in: when the next try of an unanswered call is due, and until when. */
+function nextSlot(t: number, s: CallSettings): { at: number; end: number } {
+  const cur = slotAt(t, s);
+  const from = cur.open ? cur.to : cur.from;
+  const nx = slotAt(from, s);
+  const at = nx.open ? from : nx.from;
+  return { at, end: slotAt(at, s).to };
+}
+
+export interface EcSum {
+  /** calls made on orders already called once (the call backs) */
+  calls: number;
+  /** of those, made in time: before the call-back time + 30 min, or within the call slot after an unanswered try */
+  onTime: number;
+  /** orders closed in En cours: confirmed, the client said no (both reached), never reached */
+  confirmed: number;
+  saidNo: number;
+  never: number;
+  /** calls made until the client answered, added up over the orders reached (÷ reached = the average) */
+  tries: number;
+}
+export interface EcAgent extends EcSum {
+  id: number;
+  name: string;
+  /** his En cours orders whose call back is late, now */
+  late: number;
+}
+export interface EcTeam extends EcSum {
+  key: string;
+  kind: 'team' | 'agency';
+  name: string;
+  /** agents who made a call today (null: an agency — its agents stay private) */
+  agents: number | null;
+  inProgress: number;
+  late: number;
+}
+
+/**
+ * En cours › Statistiques, as the owner's sketches (27 Nov 2026, « Agent manager view — En cours » and « Teams director
+ * view — En cours »): today only, live, no filters. The job of En cours is to reach the client (he can say no at the 2nd
+ * call): the call backs made today and how many on time, how the orders closed today ended (confirmed, said no, never
+ * reached) and the calls it took to reach the client; the same yesterday at the same hour (the arrows); what is in
+ * progress right now; one line per agent — or, for the store's owner and administrators, one line per team (an agency
+ * is one line, its agents private) and the load per agent; `team`: that team's manager view.
+ */
+async function enCoursStats(ctx: Ctx, i: { team?: string } = {}) {
+  const now = ctx.now();
+  const calls = await getSetting(ctx.db, 'calls');
+  const day = algiersDayStart(now);
+  const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
+  const T = director ? await getSetting(ctx.db, 'teams') : [];
+  const { opened, membersOf, inView } = teamView(T, director ? i.team : undefined);
+  // the orders with a call or a change of their confirmation since yesterday, and each one's whole call history
+  const touched = (
+    await ctx.db.query(
+      `SELECT DISTINCT o.id, o.agent_id, o.conf_agency_id, o.came FROM order_events e JOIN sales o ON o.id = e.order_id
+        WHERE e.at >= $1 AND (e.kind = 'conf_status' OR (e.kind = 'call' AND e.to_value = 'busy'))${statsSql(ctx, 'o')}`,
+      [isoT(day - DAY)],
+    )
+  )
+    .map((r: any) => ({ id: num(r.id), agentId: numOrNull(r.agent_id), agencyId: numOrNull(r.conf_agency_id), came: (r.came ?? null) as string | null }))
+    .filter((o) => inView(o.agentId, o.agencyId));
+  type Ev = { at: number; by: number | null; kind: string; from: string | null; to: string; note: string | null; data: any };
+  const hist = new Map<number, Ev[]>();
+  const idList = touched.map((o) => o.id);
+  for (let k = 0; k < idList.length; k += 1000) {
+    const ev = await ctx.db.query(
+      `SELECT order_id, at, user_id, kind, from_value, to_value, note, data FROM order_events
+        WHERE order_id = ANY($1) AND (kind = 'conf_status' OR (kind = 'call' AND to_value = 'busy')) ORDER BY order_id, at, id`,
+      [idList.slice(k, k + 1000)],
+    );
+    for (const e of ev) {
+      const id = num(e.order_id);
+      if (!hist.has(id)) hist.set(id, []);
+      hist.get(id)!.push({ at: Date.parse(iso(e.at)), by: numOrNull(e.user_id), kind: String(e.kind), from: e.from_value ?? null, to: String(e.to_value ?? ''), note: e.note ?? null, data: e.data ?? null });
+    }
+  }
+  // a call: a person's change of the confirmation (not a reset to « Nouvelle », not a duplicate mark), or « Occupé »
+  const isCall = (e: Ev) => e.by !== null && (e.kind === 'call' || !NOT_A_CALL.includes(e.to));
+  type Back = { at: number; by: number; ok: boolean; agencyId: number | null };
+  type Close = { id: number; at: number; agentId: number | null; agencyId: number | null; how: 'confirmed' | 'saidNo' | 'never'; tries: number };
+  const backs: Back[] = [];
+  const closes: Close[] = [];
+  const anyCall: { at: number; by: number; agencyId: number | null }[] = [];
+  for (const o of touched) {
+    const evs = hist.get(o.id) ?? [];
+    const cl = evs.filter(isCall);
+    cl.forEach((c, k) => {
+      anyCall.push({ at: c.at, by: c.by!, agencyId: o.agencyId });
+      // the first call is Nouvelles'; a change made on an order that was not in En cours is not a call back
+      if (k === 0 || (c.kind === 'conf_status' && !EN_COURS.includes(c.from ?? ''))) return;
+      // when it was due: the call-back time it had (+30 min), else within the call slot after the last call
+      const nca: string | null = c.kind === 'conf_status' && c.data && 'nca' in c.data ? c.data.nca : cl[k - 1].data?.callback ?? null;
+      const end = nca ? Date.parse(nca) + CALLBACK_WINDOW : nextSlot(cl[k - 1].at, calls).end;
+      backs.push({ at: c.at, by: c.by!, ok: c.at <= end, agencyId: o.agencyId });
+    });
+    for (const e of evs) {
+      // (an abandoned cart counts in the team's numbers only once confirmed: carts.ts)
+      if (e.kind !== 'conf_status' || !EN_COURS.includes(e.from ?? '') || !EC_CLOSED.includes(e.to) || cartLeftOut(o.came, e.to)) continue;
+      // closed in En cours: called once at least before (else its first call closed it: Nouvelles)
+      if (!cl.some((c) => c.at < e.at)) continue;
+      const how = CONFIRMED_LIKE.includes(e.to) ? 'confirmed' : neverReached(e.to, e.note) ? 'never' : 'saidNo';
+      closes.push({ id: o.id, at: e.at, agentId: o.agentId, agencyId: o.agencyId, how, tries: cl.filter((c) => c.at <= e.at).length });
+    }
+  }
+  closes.sort((a, b) => a.at - b.at);
+  const W0 = { a: day, b: now + 1 };
+  const W1 = { a: day - DAY, b: now - DAY + 1 };
+  const inW = (w: { a: number; b: number }, t: number) => t >= w.a && t < w.b;
+  const sumOf = (bs: Back[], cs: Close[]): EcSum => {
+    // an order closed twice in the window counts once, as it ended
+    const last = [...new Map(cs.map((c) => [c.id, c])).values()];
+    const reached = last.filter((c) => c.how !== 'never');
+    return {
+      calls: bs.length,
+      onTime: bs.filter((b) => b.ok).length,
+      confirmed: last.filter((c) => c.how === 'confirmed').length,
+      saidNo: last.filter((c) => c.how === 'saidNo').length,
+      never: last.filter((c) => c.how === 'never').length,
+      tries: reached.reduce((s, c) => s + c.tries, 0),
+    };
+  };
+  const sum = (w: { a: number; b: number }) => sumOf(backs.filter((b) => inW(w, b.at)), closes.filter((c) => inW(w, c.at)));
+  // right now: the orders of the En cours tab; a call back is late past its window, « due within the hour » before
+  const rows = (
+    await ctx.db.query(
+      `SELECT id, agent_id, conf_agency_id, total, attempts, next_call_at, last_call_at, created_at, assigned_at FROM sales o
+        WHERE conf_status = ANY($1)${statsSql(ctx, 'o')}`,
+      [EN_COURS],
+    )
+  )
+    .map((r: any) => {
+      const created = Date.parse(iso(r.created_at));
+      const assigned = r.agent_id && r.assigned_at ? Date.parse(iso(r.assigned_at)) : null;
+      const attempts = num(r.attempts);
+      const next = r.next_call_at ? Date.parse(iso(r.next_call_at)) : null;
+      const last = r.last_call_at ? Date.parse(iso(r.last_call_at)) : assigned && assigned > created ? assigned : created;
+      // its next call: the time picked, else the slot after the last try (past the shop's tries: until that slot ends);
+      // never called (an « À vérifier »): its first call, Nouvelles'
+      let win: { at: number; end: number } | null = null;
+      if (next !== null) win = { at: next, end: next + CALLBACK_WINDOW };
+      else if (attempts > 0 && attempts < calls.tries) win = nextSlot(last, calls);
+      else if (attempts > 0) {
+        const sl = slotAt(last, calls);
+        win = { at: last, end: sl.open ? sl.to : sl.from };
+      }
+      return {
+        agentId: numOrNull(r.agent_id),
+        agencyId: numOrNull(r.conf_agency_id),
+        total: num(r.total),
+        late: !!win && win.end < now,
+        soon: !!win && win.end >= now && win.at <= now + HOUR,
+      };
+    })
+    .filter((o) => inView(o.agentId, o.agencyId));
+  const live = {
+    inProgress: rows.length,
+    value: rows.reduce((s, o) => s + o.total, 0),
+    late: rows.filter((o) => o.late).length,
+    dueHour: rows.filter((o) => o.soon).length,
+  };
+  // one line per agent: the store's own agents (an agency's agents stay private: never a line here)
+  const who = await names(ctx.db);
+  const ownB = backs.filter((b) => inW(W0, b.at) && b.agencyId === null);
+  const ownC = closes.filter((c) => inW(W0, c.at) && c.agencyId === null && c.agentId !== null);
+  const ownLate = rows.filter((o) => o.late && o.agencyId === null && o.agentId !== null);
+  const ids = new Set<number>([...ownB.map((b) => b.by), ...ownC.map((c) => c.agentId!), ...ownLate.map((o) => o.agentId!)]);
+  const agents: EcAgent[] = [...ids]
+    .map((id) => ({ id, name: who.get(id) ?? '—', ...sumOf(ownB.filter((b) => b.by === id), ownC.filter((c) => c.agentId === id)), late: ownLate.filter((o) => o.agentId === id).length }))
+    .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name));
+  // the store's owner and administrators (not inside one of his teams): each team side by side, the load per agent
+  const dir = director && !opened;
+  let teams: EcTeam[] | null = null;
+  let allTeams: EcTeam | null = null;
+  let perAgent: { orders: number; agents: number } | null = null;
+  if (dir) {
+    // active: made a call today (a first call or a call back) on the store's own orders
+    const active = new Set(anyCall.filter((c) => inW(W0, c.at) && c.agencyId === null).map((c) => c.by));
+    perAgent = { orders: rows.filter((o) => o.agencyId === null).length, agents: active.size };
+    const A = await agencyNames(ctx);
+    teams = [
+      ...T.map((t): EcTeam => {
+        const m = membersOf(t);
+        return {
+          key: `t${t.id}`,
+          kind: 'team',
+          name: t.name,
+          ...sumOf(ownB.filter((b) => m.has(b.by)), ownC.filter((c) => m.has(c.agentId!))),
+          agents: [...active].filter((id) => m.has(id)).length,
+          inProgress: rows.filter((o) => o.agencyId === null && o.agentId !== null && m.has(o.agentId)).length,
+          late: ownLate.filter((o) => m.has(o.agentId!)).length,
+        };
+      }),
+      ...A.map((a): EcTeam => ({
+        key: `a${a.id}`,
+        kind: 'agency',
+        name: a.name,
+        ...sumOf(backs.filter((b) => inW(W0, b.at) && b.agencyId === a.id), closes.filter((c) => inW(W0, c.at) && c.agencyId === a.id)),
+        agents: null,
+        inProgress: rows.filter((o) => o.agencyId === a.id).length,
+        late: rows.filter((o) => o.late && o.agencyId === a.id).length,
+      })),
+    ].filter((x) => x.kind === 'team' || x.inProgress || x.calls || x.confirmed + x.saidNo + x.never);
+    // « Toutes les équipes »: the lines above added up, never an average of the teams
+    const add = (k: keyof EcSum | 'inProgress' | 'late') => teams!.reduce((s, r) => s + r[k], 0);
+    allTeams = {
+      key: 'all',
+      kind: 'team',
+      name: '',
+      calls: add('calls'),
+      onTime: add('onTime'),
+      confirmed: add('confirmed'),
+      saidNo: add('saidNo'),
+      never: add('never'),
+      tries: add('tries'),
+      agents: teams.reduce((s, r) => s + (r.agents ?? 0), 0),
+      inProgress: add('inProgress'),
+      late: add('late'),
+    };
+  }
+  return {
+    today: sum(W0),
+    prev: sum(W1),
+    live,
+    agents,
+    /** the agent table's « Équipe » line: those agents' numbers added up */
+    agentsTotal: sumOf(ownB, ownC),
+    director: dir,
+    team: opened ? { key: `t${opened.id}`, name: opened.name } : null,
+    perAgent,
+    teams,
+    allTeams,
+  };
+}
+
 async function periodNew(ctx: Ctx, i: KfInput) {
   const R = kfRange(ctx.now(), i);
   const O = await ctx.db.query(`SELECT id, conf_status, attempts, agent_id, total FROM sales WHERE ${periodSql(i.basis, 'sales')}${statsSql(ctx, 'sales')}`, [isoT(R.a), isoT(R.b)]);
@@ -772,103 +1027,6 @@ async function deliveryPerf(ctx: Ctx, i: KfInput & { on: 'created' | 'confirmed'
     rate: pc(ok.length, ok.length + back.length),
     overall: pc(ok.length, O.length),
     cancelledAfter: f(['cancelled']).length,
-  };
-}
-
-/**
- * En cours › Statistiques.
- * Live block (no dates): every order of the En cours tab, so the numbers match the tab count.
- * Period block (dates + basis): what the team turned into results — confirmation, recovery, complete attempts.
- */
-async function enCours(ctx: Ctx, i: KfInput) {
-  const now = ctx.now();
-  const R = kfRange(now, i);
-  const upd = i.basis === 'updated';
-  const ST = [...CONF_SUBS.attente] as string[];
-  const O = await ctx.db.query(`SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM sales WHERE conf_status = ANY($1)${statsSql(ctx, 'sales')}`, [ST]);
-  // orders settled on the period: confirmed, or cancelled by the client (not fake / duplicate / wrong number); an
-  // abandoned cart only once confirmed (leadkind.ts)
-  const S = await ctx.db.query(
-    upd
-      ? `SELECT o.agent_id, o.conf_status, o.attempts FROM sales o WHERE ((o.conf_status = 'confirmed' AND o.confirmed_at >= $1 AND o.confirmed_at < $2)
-           OR (o.conf_status = 'cancelled' AND EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = 'cancelled' AND e.at >= $1 AND e.at < $2)))
-           AND ${teamCountsSql('o.')}${statsSql(ctx, 'o')}`
-      : `SELECT agent_id, conf_status, attempts FROM sales WHERE conf_status IN ('confirmed', 'cancelled') AND created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}${statsSql(ctx, 'sales')}`,
-    [isoT(R.a), isoT(R.b)],
-  );
-  const nx = (o: any) => (o.next_call_at ? Date.parse(iso(o.next_call_at)) : null);
-  const isDue = (o: any) => nx(o) === null || nx(o)! <= now;
-  const isLate = (o: any) => nx(o) !== null && nx(o)! < now - 30 * MIN;
-  const late = O.filter(isLate).sort((a: any, b: any) => nx(a)! - nx(b)!);
-  const later = O.filter((o: any) => nx(o) !== null && nx(o)! > now).sort((a: any, b: any) => nx(a)! - nx(b)!);
-  const oldest = [...O].sort((a: any, b: any) => Date.parse(iso(a.created_at)) - Date.parse(iso(b.created_at)))[0];
-  const who = await names(ctx.db);
-  type Row = { agentId: number | null; name: string | null; n: number; value: number; due: number; late: number; many: number; confirmed: number; cancelled: number; recovered: number; lost: number; complete: number };
-  const M = new Map<string, Row>();
-  const row = (agentId: unknown): Row => {
-    const k = String(agentId ?? '');
-    if (!M.has(k)) M.set(k, { agentId: numOrNull(agentId), name: agentId ? who.get(num(agentId)) ?? '—' : null, n: 0, value: 0, due: 0, late: 0, many: 0, confirmed: 0, cancelled: 0, recovered: 0, lost: 0, complete: 0 });
-    return M.get(k)!;
-  };
-  for (const o of O) {
-    const v = row(o.agent_id);
-    v.n++;
-    v.value += num(o.total);
-    if (isDue(o)) v.due++;
-    if (isLate(o)) v.late++;
-    if (num(o.attempts) >= 3) v.many++;
-  }
-  for (const o of S) {
-    const v = row(o.agent_id);
-    const a = num(o.attempts);
-    if (o.conf_status === 'confirmed') {
-      v.confirmed++;
-      if (a >= 2) v.recovered++;
-    } else {
-      v.cancelled++;
-      if (a >= 2) v.lost++;
-      if (a >= 3) v.complete++;
-    }
-  }
-  const rates = (v: Omit<Row, 'agentId' | 'name'>) => ({
-    confRate: pc(v.confirmed, v.confirmed + v.cancelled),
-    recoveryRate: pc(v.recovered, v.recovered + v.lost),
-    completeRate: pc(v.complete, v.cancelled),
-  });
-  const tot = [...M.values()].reduce(
-    (t, v) => {
-      for (const k of ['n', 'value', 'due', 'late', 'many', 'confirmed', 'cancelled', 'recovered', 'lost', 'complete'] as const) t[k] += v[k];
-      return t;
-    },
-    { n: 0, value: 0, due: 0, late: 0, many: 0, confirmed: 0, cancelled: 0, recovered: 0, lost: 0, complete: 0 },
-  );
-  const byAgent = [...M.values()]
-    .map((v) => ({ ...v, ...rates(v) }))
-    // best first: confirmation rate, then fewer late callbacks
-    .sort((a, b) => (b.confRate ?? -1) - (a.confRate ?? -1) || a.late - b.late || b.n - a.n);
-  return {
-    // live
-    count: O.length,
-    value: tot.value,
-    dueNow: tot.due,
-    late: late.length,
-    lateOldest: late[0] ? { ref: late[0].ref, since: iso(late[0].next_call_at) } : null,
-    later: later.length,
-    nextLater: later[0] ? { ref: later[0].ref, at: iso(later[0].next_call_at) } : null,
-    oldest: oldest ? { ref: oldest.ref, since: iso(oldest.created_at), attempts: num(oldest.attempts), agent: oldest.agent_id ? who.get(num(oldest.agent_id)) ?? '—' : null } : null,
-    noAgent: O.filter((o: any) => !o.agent_id).length,
-    avgAttempts: O.length ? O.reduce((s: number, o: any) => s + num(o.attempts), 0) / O.length : null,
-    many: tot.many,
-    old: O.filter((o: any) => now - Date.parse(iso(o.created_at)) > 48 * 3_600_000).length,
-    byStatus: Object.fromEntries(ST.map((s) => [s, O.filter((o: any) => o.conf_status === s).length])),
-    // period
-    confirmed: tot.confirmed,
-    cancelled: tot.cancelled,
-    recovered: tot.recovered,
-    lost: tot.lost,
-    complete: tot.complete,
-    ...rates(tot),
-    byAgent,
   };
 }
 
@@ -1455,7 +1613,7 @@ export const confirmationProcs = {
   'confirmation.nouvelles': proc([...MGR], z.object({ team: z.string().max(40).optional() }), (ctx, i) => nouvellesStats(ctx, i)),
   'confirmation.period': proc([...MGR], KfInput, (ctx, i) => periodNew(ctx, i)),
   'confirmation.delivery': proc([...MGR], KfInput.extend({ on: z.enum(['created', 'confirmed']).default('created') }), (ctx, i) => deliveryPerf(ctx, i)),
-  'confirmation.enCours': proc([...MGR], KfInput, (ctx, i) => enCours(ctx, i)),
+  'confirmation.enCours': proc([...MGR], z.object({ team: z.string().max(40).optional() }), (ctx, i) => enCoursStats(ctx, i)),
   'confirmation.confirmed': proc([...MGR], KfInput, (ctx, i) => confirmedKpis(ctx, i)),
   /** Confirmation › Statistiques: leads, Leads quality, why we lose them, upsell, speed, agents and products. */
   'confirmation.overview': proc([...MGR], KfInput, (ctx, i) => overview(ctx, i)),

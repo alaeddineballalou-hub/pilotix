@@ -174,16 +174,16 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 
 /* Statistiques drawn as the owner's sketches (27 Nov 2026, the « … view » PDFs): white tiles with the main number in
    navy and a line against yesterday at the same hour; plain tables (red: under the red line, gray: too few calls) */
-.px-sx { padding: 0 18px 18px; }
+.px-sx { padding: 0 14px 16px; }
 .px-sx-sec { display: flex; align-items: center; gap: 10px; margin: 16px 0 7px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
 .px-sx-sec.first { margin-top: 2px; }
 .px-sx-back { padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; }
 .px-sx-back:hover { border-color: var(--ink); }
-.px-sx-grp { display: flex; flex-wrap: wrap; gap: 10px; }
+.px-sx-grp { display: flex; flex-wrap: wrap; gap: 8px; }
 .px-sx-grp > div { display: flex; flex-direction: column; min-width: 0; }
 .px-sx-gh { margin-bottom: 5px; font-size: 12.5px; color: var(--muted); }
-.px-sx-gt { display: grid; flex: 1; gap: 10px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-.px-sx-tile { min-width: 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.px-sx-gt { display: grid; flex: 1; gap: 8px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.px-sx-tile { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .px-sx-tile .lb { font-size: 12px; color: var(--muted); }
 .px-sx-tile .v { font-size: 24px; font-weight: 500; line-height: 1.25; color: var(--ink); white-space: nowrap; }
 .px-sx-tile .gl { font-size: 12px; color: var(--muted); }
@@ -201,8 +201,8 @@ html[data-theme="dark"] .px-sx-tile.main :is(.lb, .gl, .d) { color: var(--on-nav
 .px-sx-tile.warn { border-color: #F3DDB0; background: var(--warn-soft); }
 .px-sx-tile.warn :is(.lb, .v) { color: var(--warn); }
 html[data-theme="dark"] .px-sx-tile.warn { border-color: var(--warn-soft); }
-.px-sx-t3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.px-sx-t4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.px-sx-t3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.px-sx-t4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .px-sx-tbl { --px-zebra: transparent; }
 .px-sx-tbl td.bad { color: var(--coral); font-weight: 500; }
 .px-sx-tbl td.lt, .px-sx-tbl td.go, .px-sx-tbl tbody tr.few td { color: #9AA3B5; }
@@ -213,6 +213,21 @@ html[data-theme="dark"] .px-sx-tile.warn { border-color: var(--warn-soft); }
 .px-sx-tbl tbody tr.go { cursor: pointer; }
 .px-sx-tbl tbody tr.go:hover { --px-zebra: var(--raise); }
 .px-sx-tbl tbody tr.go:hover > td { background-color: var(--raise); }
+/* the « ? » of a tile: its short explanation on hover */
+.px-sx-tile .lb .px-help { width: 15px; height: 15px; margin-inline-start: 5px; vertical-align: -2px; }
+.px-sx-tile.main .lb .px-help { background: rgba(255, 255, 255, .16); color: #fff; border-color: transparent; }
+/* En cours: how today's closed orders ended (reached: confirmed, said no · never reached) */
+.px-sx-bar { padding: 2px 0 0; }
+.px-sx-brk { display: flex; gap: 2px; margin-bottom: 5px; }
+.px-sx-brk div { padding-bottom: 3px; border-bottom: 1.5px solid #B9C1D0; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.px-sx-track { display: flex; gap: 2px; height: 16px; overflow: hidden; border-radius: 8px; background: var(--line); }
+.px-sx-track div { height: 100%; }
+.px-sx-bar .c { background: #B7E2CB; }
+.px-sx-bar .x { background: #D5DBE6; }
+.px-sx-bar .n { background: #F7D69A; }
+.px-sx-lgd { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 7px; font-size: 12.5px; }
+.px-sx-lgd i { display: inline-block; width: 10px; height: 10px; margin-inline-end: 6px; border-radius: 3px; }
+.px-sx-empty { margin: 0; font-size: 13px; color: var(--muted); }
 @media (max-width: 760px) {
   .px-sx { padding: 0 12px 12px; }
   .px-sx-t3, .px-sx-t4 { grid-template-columns: 1fr 1fr; }

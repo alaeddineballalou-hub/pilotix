@@ -91,11 +91,10 @@ test('statistics: managers only, numbers add up', async () => {
   const pr: any = await call('confirmation.period', mgr, { per: '30' });
   assert.ok(pr.received >= pr.confirmed + pr.cancelled);
   assert.ok(pr.rate === null || (pr.rate >= 0 && pr.rate <= 100));
-  const ec: any = await call('confirmation.enCours', mgr, { per: '30' });
-  assert.equal(ec.byAgent.reduce((s: number, a: any) => s + a.n, 0), ec.count);
-  assert.equal(ec.byAgent.reduce((s: number, a: any) => s + a.confirmed, 0), ec.confirmed);
-  assert.ok(ec.complete <= ec.cancelled && ec.lost <= ec.cancelled && ec.recovered <= ec.confirmed);
-  assert.ok(ec.confRate === null || (ec.confRate >= 0 && ec.confRate <= 100));
+  const ec: any = await call('confirmation.enCours', mgr, {});
+  assert.ok(ec.today.onTime <= ec.today.calls);
+  assert.ok(ec.agents.reduce((s: number, a: any) => s + a.calls, 0) <= ec.today.calls);
+  assert.ok(ec.live.late <= ec.live.inProgress && ec.live.dueHour <= ec.live.inProgress);
   const cf: any = await call('confirmation.confirmed', mgr, { per: '30' });
   assert.equal(cf.byAgent.reduce((s: number, a: any) => s + a.n, 0), cf.confirmed);
   assert.ok(cf.upsellOrders <= cf.confirmed);
