@@ -72,6 +72,58 @@ function sumBuckets(parts: Part[]): Record<string, number> | null {
   return out;
 }
 
+/** The reasons of several shops in one top list (topReasons, orders.ts: the 6 most given, the others added up). */
+function mergeReasons(list: any[]): { top: { reason: string; n: number }[]; others: number; none: number } {
+  const m = new Map<string, number>();
+  let others = 0;
+  let none = 0;
+  for (const r of list) {
+    if (!r) continue;
+    for (const x of r.top ?? []) m.set(String(x.reason), (m.get(String(x.reason)) ?? 0) + num(x.n));
+    others += num(r.others);
+    none += num(r.none);
+  }
+  const all = [...m.entries()].map(([reason, n]) => ({ reason, n })).sort((a, b) => b.n - a.n);
+  return { top: all.slice(0, 6), others: others + all.slice(6).reduce((s, x) => s + x.n, 0), none };
+}
+
+/**
+ * Terminé › Annulé's report over every shop (an agency's « Tous les vendeurs », a seller's « Toutes les boutiques »):
+ * the numbers and the reasons add up, the rates are made again from the totals. The tables by agent and by company stay
+ * one shop's (their ids are each shop's own): pick one shop to see them. The money comes only when every shop sent it
+ * (the Super admin view).
+ */
+export const CANCEL_REPORT_FAN: Fan = {
+  merge: (parts) => {
+    const outs = parts.map((p) => p.out).filter(Boolean);
+    const C = outs.map((o) => o.conf ?? {});
+    const R = outs.map((o) => o.returns ?? {});
+    const add = (list: any[], k: string) => list.reduce((s, x) => s + num(x?.[k]), 0);
+    const rate = (bad: number, good: number) => (bad + good > 0 ? bad / (bad + good) : null);
+    const money = R.length > 0 && R.every((r) => r.fees !== null && r.fees !== undefined);
+    const confN = add(C, 'n');
+    const confirmed = add(C, 'confirmed');
+    const backN = add(R, 'n');
+    const delivered = add(R, 'delivered');
+    return {
+      conf: { n: confN, amount: add(C, 'amount'), confirmed, rate: rate(confN, confirmed), byStatus: sumDeep(C.map((c) => c.byStatus)) ?? {}, reasons: mergeReasons(C.map((c) => c.reasons)), agents: [] },
+      returns: {
+        n: backN,
+        returning: add(R, 'returning'),
+        returned: add(R, 'returned'),
+        amount: add(R, 'amount'),
+        fees: money ? add(R, 'fees') : null,
+        swaps: add(R, 'swaps'),
+        swapFees: money ? add(R, 'swapFees') : null,
+        delivered,
+        rate: rate(backN, delivered),
+        reasons: mergeReasons(R.map((r) => r.reasons)),
+        companies: [],
+      },
+    };
+  },
+};
+
 /**
  * The red « Appels en retard » banner over every seller (an agency's agent, « Tous les vendeurs »): the numbers add up,
  * and the next customer to call is chosen the way each shop chooses its own (banner(), confirmation.ts): the coming
@@ -252,6 +304,8 @@ export const FANOUT: Record<string, Fan> = {
     },
   },
   'confirmation.banner': BANNER_FAN,
+  // Terminé › Annulé: « Raisons des annulations » of every seller together
+  'orders.cancelReport': CANCEL_REPORT_FAN,
   'suivi.list': {
     paged: { defaultSize: 300, max: 500 },
     input: (i) => ({ ...i, page: 1, pageSize: Math.min(500, (i?.page ?? 1) * (i?.pageSize ?? 300)) }),

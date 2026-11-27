@@ -133,7 +133,12 @@ test('orders.cancelReport: cancellations by status, reason and agent; returns by
   assert.equal(r.returns.fees, d.total.returnFees + d.total.returnOverweight);
   for (const c of r.returns.companies) assert.equal(c.rate, c.returns / (c.returns + c.delivered));
   assert.equal(r.returns.reasons.top[0].reason, 'Refusé par le client');
-  await assert.rejects(call('orders.cancelReport', await as(EMAILS.conf), { from, to }), /Accès refusé/);
+  // since 27 Nov 2026 (« Terminé »: the reasons in every view) a confirmation agent reads it too, his own orders, without
+  // what the returns cost the shop
+  const mine: any = await call('orders.cancelReport', await as(EMAILS.conf), { from, to });
+  assert.ok(mine.conf.n <= r.conf.n);
+  assert.equal(mine.returns.fees, null);
+  await assert.rejects(call('orders.cancelReport', await as(EMAILS.livreur), { from, to }), /Accès refusé/);
   assert.ok(await call('orders.cancelReport', await as(EMAILS.manager), { from, to }));
 
   // the lists behind each line: the same orders, found by the same period, status, agent, company and reason

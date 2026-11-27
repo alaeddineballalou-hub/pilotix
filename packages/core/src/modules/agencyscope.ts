@@ -328,6 +328,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'orders.undoMany': order('ids'),
   'orders.reasons': order('ids'),
   'orders.companyFees': order('ids'),
+  // Terminé › Annulé's « Raisons des annulations » on the agency's own orders (the report keeps to them; no money)
+  'orders.cancelReport': free,
   'orders.sync': (ctx, i) => ownOrders(ctx, nums(Array.isArray(i?.actions) ? i.actions.map((a: any) => a?.id) : [])),
   'confirmation.meta': free,
   // (the column presets are the agency's own, never the store's: AGENCY_COL_PRESETS, in the agency's space)

@@ -330,7 +330,12 @@ function App() {
     if (line && !seen(line)) to = lines.find(seen)?.href ?? `#/${homeOf()}`;
     else if (group) to = group.href;
     else if (item?.children && !rightOn(menuRight(page))) to = `#/${homeOf()}`;
-    else if (!tabOn(page, sub)) to = tabsLeft.length ? `#/${page}/${tabsLeft[0]}` : `#/${homeOf()}`;
+    else if (!tabOn(page, sub)) {
+      // a line standing for several tabs (« Terminé »: Livré and Annulé): the next one of its own tabs first
+      const own = nav.flatMap((n) => n.children ?? []).find((c) => c.tabOf === page && (c.id === sub || !!c.tabsToo?.includes(sub ?? '')));
+      const mate = own && [own.id, ...(own.tabsToo ?? [])].find((x) => tabsLeft.includes(x));
+      to = mate ? `#/${page}/${mate}` : tabsLeft.length ? `#/${page}/${tabsLeft[0]}` : `#/${homeOf()}`;
+    }
     if (to && to !== `#/${[page, sub].filter(Boolean).join('/')}`) {
       go(to, { replace: true });
       [page, sub] = to.replace(/^#\/?/, '').split('/');

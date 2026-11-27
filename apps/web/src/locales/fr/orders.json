@@ -516,6 +516,8 @@
     "colCost": "Coût",
     "backCoAria": "{{name}} : {{n}} retours pour {{d}} livrés, taux {{pct}}, coût {{v}}. Voir ses retours",
     "backHow": "Taux = retours ÷ (retours + livrés) sur la période ; coût = frais de retour et surpoids, en DA.",
+    "backCoAriaRate": "{{name}} : {{n}} retours pour {{d}} livrés, taux {{pct}}. Voir ses retours",
+    "backHowRate": "Taux = retours ÷ (retours + livrés) sur la période.",
     "atConf": "À la confirmation",
     "returns": "Retours",
     "confRate": "taux d’annulation {{pct}}",

@@ -91,6 +91,8 @@
 .pxn-tb { display: flex; flex-direction: column; margin: 0 -6px; }
 .pxn-tr { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, .75fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 6px; min-height: 52px; padding: 8px 6px; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .pxn-tr + .pxn-tr { border-top: 1px solid var(--line); }
+/* without what the returns cost (not the Super admin view): three columns */
+.pxn-tb.nocost .pxn-tr { grid-template-columns: minmax(0, 1.75fr) minmax(0, .75fr) minmax(0, 1fr); }
 .pxn-tr > :not(:first-child) { text-align: end; }
 .pxn-tr > b { font-size: 13.5px; }
 .pxn-th { min-height: 0; padding-block: 0 6px; font-size: 11.5px; font-weight: 800; line-height: 1.2; color: var(--muted); cursor: default; }
@@ -234,3 +236,28 @@ button.pxn-tr:focus-visible { outline: 2px solid #F7A823; outline-offset: -2px; 
 .pxn.wide.solo { grid-template-columns: minmax(0, 1fr); }
 .pxn.wide.solo > .pxn-side { display: none; }
 .pxn.wide.solo .pxn-main { grid-column: 1; grid-row: auto; }
+
+/* ===== « Terminé » (owner's choice, 27 Nov 2026): Livré and Annulé, one line of the menu; the old « Commandes » card's
+   two big tiles at the top go from one to the other (DoneTiles). ===== */
+.pxn-ends { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.pxn.wide > .pxn-top > .pxn-ends { flex: 1 1 100%; }
+.pxn-ends a { box-sizing: border-box; min-width: 0; min-height: 92px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 14px 16px; border-radius: 18px; border: 1px solid var(--line); text-decoration: none; color: inherit; -webkit-tap-highlight-color: transparent; transition: border-color .15s, box-shadow .15s; }
+.pxn-ends a.ok { background: color-mix(in srgb, var(--ok) 7%, var(--surface)); }
+.pxn-ends a.bad { background: color-mix(in srgb, var(--coral) 7%, var(--surface)); }
+.pxn-ends a > span { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--muted); }
+.pxn-ends a > span .bji { width: 16px; height: 16px; }
+.pxn-ends b { font-family: var(--f-display); font-size: 30px; font-weight: 700; line-height: 1.15; }
+.pxn-ends a.ok b { color: var(--ok); }
+.pxn-ends a.bad b { color: var(--coral); }
+.pxn-ends small { font-size: 12px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxn-ends a:hover { border-color: color-mix(in srgb, var(--navy) 40%, var(--line)); }
+/* the open one: the same orange frame as the screen's other choices (À la confirmation / Retours) */
+.pxn-ends a.on { border: 2px solid #F28B1E; padding: 13px 15px; box-shadow: 0 6px 18px rgb(242 139 30 / .14); }
+.pxn-ends a.on > span { color: var(--ink); }
+.pxn-ends a:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
+@media (max-width: 560px) {
+  .pxn-ends a { min-height: 84px; padding: 12px; }
+  .pxn-ends a.on { padding: 11px; }
+  .pxn-ends b { font-size: 24px; }
+  .pxn-ends small { white-space: normal; }
+}

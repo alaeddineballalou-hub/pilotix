@@ -516,6 +516,8 @@
     "colCost": "Cost",
     "backCoAria": "{{name}}: {{n}} returns for {{d}} delivered, rate {{pct}}, cost {{v}}. See its returns",
     "backHow": "Rate = returns ÷ (returns + delivered) in the period; cost = return fees and overweight, in DA.",
+    "backCoAriaRate": "{{name}}: {{n}} returns for {{d}} delivered, rate {{pct}}. See its returns",
+    "backHowRate": "Rate = returns ÷ (returns + delivered) in the period.",
     "atConf": "At confirmation",
     "returns": "Returns",
     "confRate": "cancellation rate {{pct}}",

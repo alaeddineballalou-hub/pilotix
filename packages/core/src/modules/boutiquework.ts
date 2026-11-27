@@ -101,6 +101,8 @@ export const BOUTIQUE_FANOUT: Record<string, Fan> = {
   'confirmation.counts': FANOUT['confirmation.counts'],
   'confirmation.mine': FANOUT['confirmation.mine'],
   'confirmation.list': FANOUT['confirmation.list'],
+  // Terminé › Annulé: « Raisons des annulations » of every boutique together
+  'orders.cancelReport': FANOUT['orders.cancelReport'],
   'suivi.counts': FANOUT['suivi.counts'],
   'suivi.list': FANOUT['suivi.list'],
   'catalog.guides': FANOUT['catalog.guides'],

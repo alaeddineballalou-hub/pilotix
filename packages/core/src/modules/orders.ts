@@ -2226,8 +2226,20 @@ function orderExtraProcs() {
 
     /** "Bilan des livraisons": delivered in the period, cashed or not, courier fees, returns, net to receive — total and per company. */
     'orders.deliveredReport': proc(['suivi', 'depot'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => deliveredReport(ctx, i, 'sales', true)),
-    /** Cancelled at the confirmation and returned parcels of a period: why, by whom, from which company, the cost. */
-    'orders.cancelReport': proc(['suivi', 'depot', 'agent_manager'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => cancelReport(ctx, i, true)),
+    /**
+     * Cancelled at the confirmation and returned parcels of a period: why, by whom, from which company, the cost.
+     * Everyone who works the orders reads it on his own ones (owner's choice, 27 Nov 2026: « Raisons des annulations »
+     * in the three views of Terminé — a confirmation agent and a community manager too, an agency on its orders); what
+     * the returns cost is the shop's money: the Super admin view only (the Administrateur and the Vendeur).
+     */
+    'orders.cancelReport': proc(['suivi', 'depot', 'agent_manager', 'confirmation'], z.object({ from: dateStr, to: dateStr }), async (ctx, i) => {
+      const r = await cancelReport(ctx, i, true);
+      if (shopMoney(ctx)) return r;
+      return {
+        ...r,
+        returns: { ...r.returns, fees: null, swapFees: null, companies: r.returns.companies.map((c) => ({ ...c, fees: null, swapFees: null })) },
+      };
+    }),
     /** The reason given for these orders: why they were cancelled at the confirmation (conf) or came back (back). */
     'orders.reasons': proc(null, z.object({ ids: z.array(id).max(500), of: z.enum(['conf', 'back']) }), async (ctx, i) => {
       const out: Record<string, string | null> = {};
@@ -2322,6 +2334,12 @@ function topReasons(rows: { reason: string | null }[]) {
   const others = all.slice(6).reduce((s, x) => s + x.n, 0);
   return { top: all.slice(0, 6), others, none };
 }
+
+/**
+ * The shop's money (what it cashed, what it paid, what the returns cost): its Administrateur and its Vendeur — the Super
+ * admin view (owner's choice, 27 Nov 2026); never an agency's people, a manager or an agent.
+ */
+export const shopMoney = (ctx: Ctx) => agencyOf(ctx) === null && (ctx.session.isAdmin || ctx.session.roles.includes('vendeur'));
 
 /** What was lost over a period: orders cancelled at the confirmation (their status, the reason given, by which agent,
  *  out of every order decided) and parcels coming back (why, from which company, what that costs, out of the parcels

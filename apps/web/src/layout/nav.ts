@@ -31,6 +31,8 @@ export interface NavChild {
   tabOf?: string;
   /** with tabOf: the page's other tabs this line also stands for (Commandes › En livraison: its old Bloqués) */
   tabsToo?: string[];
+  /** its name's i18n key, when it is not « nav.sub.<id> » (« Terminé ») */
+  name?: string;
 }
 
 export interface NavItem {
@@ -102,7 +104,8 @@ export const NAV: NavItem[] = STORE_MENU.map(({ cond, children, ...n }) => ({
  * their role in Utilisateurs › Rôles — and in the shop's plan.
  */
 export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean, canRules = false, has: (right: string | null) => boolean = rightOn, isOn: (page: string, sub?: string) => boolean = pageIsOn) =>
-  ((isAdmin || ((!c.roles || c.roles.some((r) => roles.includes(r))) && has(menuRight(c.id)))) || (!!c.rules && canRules)) &&
+  // a line standing for several tabs (« Terminé »: Livré and Annulé) is shown when one of them is left to the person
+  ((isAdmin || ((!c.roles || c.roles.some((r) => roles.includes(r))) && (has(menuRight(c.id)) || (!!c.tabOf && !!c.tabsToo?.some((t) => has(`tab:${c.tabOf}/${t}`)))))) || (!!c.rules && canRules)) &&
   (c.plan ? isOn(...c.plan) : isOn(c.id)) &&
   (!c.onlyIf || c.onlyIf(roles, isAdmin));
 
@@ -215,8 +218,8 @@ export const AGENCY_NAV: NavItem[] = [
       { id: 'alertes', href: '#/suivi/alertes_new', count: 'suivi', tone: 'nc-a', icon: 'alert', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['alertes', 'alertes_new', 'alertes_encours', 'traites', 'reclamation'] } },
       // Livré, Annulé, Toutes les commandes: the store's own screens (Commandes), the agency's orders only — each agent
       // his own, its chiefs all of them (owner's choice, 24 Nov 2026: the same screens everywhere)
-      { id: 'livrees', href: '#/commandes/livrees', count: 'delivered', tone: 'nc-c', icon: 'checkcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'commandes', subs: ['livrees'] } },
-      { id: 'annulees', href: '#/commandes/annulees', count: 'cancelled', icon: 'xcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'commandes', subs: ['annulees'] } },
+      // « Terminé »: Livré and Annulé on one line, as in a store (owner's choice, 27 Nov 2026)
+      { id: 'livrees', href: '#/commandes/livrees', name: 'nav.sub.termine', icon: 'checkcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'commandes', subs: ['livrees', 'annulees'] } },
       { id: 'tout', href: '#/commandes/tout', icon: 'list', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'commandes', subs: ['tout', ''] } },
     ],
   },

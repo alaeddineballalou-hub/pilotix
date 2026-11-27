@@ -231,7 +231,7 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
     {
       // « Bientôt » (control room › Réglages): shown greyed to the people who would see it, opens nothing
       item: (n) => canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect) || soonItem(n),
-      line: (c) => soonLine(c) || canSeeChild(c, roles, isAdmin, canRules) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'alertes' ? work.tasks.has('suivi') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)),
+      line: (c) => soonLine(c) || canSeeChild(c, roles, isAdmin, canRules) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'alertes' ? work.tasks.has('suivi') : ['suivi', 'enlivraison', 'livrees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)),
     },
     scrPicked,
     space === 'store',
@@ -249,7 +249,8 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
     if (c?.tabOf && c.tabOf !== n.id) return page === c.tabOf && (sub === id || !!c.tabsToo?.includes(sub ?? ''));
     // a page's own line (Suivi), but not on a tab another line of the group opens (« En livraison », its Bloqués, Annulés)
     if (id === page) return !n.children?.some((x) => x.tabOf === page && (x.id === sub || !!x.tabsToo?.includes(sub ?? '')));
-    return page === n.id && sub === id;
+    // a line standing for several tabs of its own group's page (« Terminé »: Livré and Annulé)
+    return page === n.id && (sub === id || !!c?.tabsToo?.includes(sub ?? ''));
   };
   // each group remembers whether it is open (Commandes keeps its old key)
   const grpKey = (id: string) => (id === 'commandes' ? 'cmdgrp' : `grp-${id}`);
@@ -348,13 +349,13 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
               </a>
               <div className={`nav-sub${grpOpen[n.id] !== false ? '' : ' px-sub-closed'}`} style={{ display: 'flex' }}>
                 {kidsOn(n).map((c) => {
-                  if (soonLine(c)) return <SoonLine key={c.id} icon={c.icon ?? 'list'} label={t(`nav.sub.${c.id}`)} sub />;
+                  if (soonLine(c)) return <SoonLine key={c.id} icon={c.icon ?? 'list'} label={t(c.name ?? `nav.sub.${c.id}`)} sub />;
                   const on = childOn(n, c.id);
                   const v = c.count ? counts[c.count] : undefined;
                   return (
-                    <a key={c.id} href={c.href} className={`nav-item nav-sub-item ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined} title={`${t(`nav.sub.${c.id}`)}${v !== undefined ? ` · ${v}` : ''}`}>
+                    <a key={c.id} href={c.href} className={`nav-item nav-sub-item ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined} title={`${t(c.name ?? `nav.sub.${c.id}`)}${v !== undefined ? ` · ${v}` : ''}`}>
                       <Icon name={c.icon ?? 'list'} className="ic px-sub-ic" />
-                      <span className="nav-l">{t(`nav.sub.${c.id}`)}</span>
+                      <span className="nav-l">{t(c.name ?? `nav.sub.${c.id}`)}</span>
                       {v !== undefined && <Count v={v} tone={c.tone ?? 'nc-a'} />}
                     </a>
                   );
@@ -506,7 +507,7 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
               <StageBar
                 flow={false}
                 current={kids(curGrp).find((c) => childOn(curGrp, c.id))?.id ?? ''}
-                items={kids(curGrp).filter((c) => !soonLine(c)).map((c) => ({ key: c.id, label: t(`nav.sub.${c.id}`), href: c.href, count: c.count ? counts[c.count] : undefined }))}
+                items={kids(curGrp).filter((c) => !soonLine(c)).map((c) => ({ key: c.id, label: t(c.name ?? `nav.sub.${c.id}`), href: c.href, count: c.count ? counts[c.count] : undefined }))}
               />
             </div>
           )}

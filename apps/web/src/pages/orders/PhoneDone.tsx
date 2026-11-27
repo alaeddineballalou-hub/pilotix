@@ -15,7 +15,8 @@ import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useAgentName } from '../../lib/agentName';
 import { useScope } from '../../lib/seller';
-import { useInAgency, useSession } from '../../lib/session';
+import { useConfView, useInAgency, useSession } from '../../lib/session';
+import { tabOn } from '../../lib/rights';
 import { store } from '../../lib/store';
 import { useIsPhone } from '../../lib/useMedia';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
@@ -134,30 +135,27 @@ function useShow(f: PF, setF: (f: PF) => void) {
 
 // ---------------------------------------------------------------- small parts
 /**
- * The road of the orders: Confirmation › Dépôt › Suivi, then the two ends (Livré, Annulé). Counts of now. A confirmation
- * agency has no Dépôt (the seller's), and its Suivi starts with the parcels on the road.
+ * « Terminé » (owner's choice, 27 Nov 2026): Livré and Annulé are one line of the menu, and these two big tiles — the
+ * old « Commandes » card's (Tableau) — sit at the top of both screens to go from one to the other in one tap. Counts of
+ * now (each one his own orders, a manager his team's); a tile the person's role does not open is not shown.
  */
-function Road({ on }: { on: 'livrees' | 'annulees' }) {
+function DoneTiles({ on }: { on: 'livrees' | 'annulees' }) {
   const { t } = useTranslation();
   const c = useCounts();
-  const agency = useInAgency();
-  const step = (key: string, href: string, label: string, v: number | undefined, tone = '') => (
-    <a key={key} href={href} className={`pxn-st${tone ? ` ${tone}` : ''}${on === key ? ' on' : ''}`} aria-current={on === key ? 'page' : undefined}>
-      <small>{label}</small>
-      <b className="ltr">{v === undefined ? '…' : n(v)}</b>
-    </a>
-  );
+  const tile = (key: 'livrees' | 'annulees', icon: string, label: string, v: number | undefined, s: string, tone: 'ok' | 'bad') =>
+    tabOn('commandes', key) ? (
+      <a key={key} className={`${tone}${on === key ? ' on' : ''}`} href={`#/commandes/${key}`} aria-current={on === key ? 'page' : undefined}>
+        <span>
+          <Icon name={icon} /> {label}
+        </span>
+        <b className="ltr">{v === undefined ? '…' : n(v)}</b>
+        <small>{s}</small>
+      </a>
+    ) : null;
   return (
-    <nav className="pxn-road" aria-label={t('orders.title')}>
-      <div className="pxn-run">
-        {step('confirmation', '#/confirmation', t('orders.kpi.confirmation'), c?.todo)}
-        {!agency && step('depot', '#/depot', t('orders.kpi.depot'), c?.depot)}
-        {step('suivi', agency ? '#/suivi/enlivraison' : '#/suivi', t('orders.kpi.suivi'), c?.suivi)}
-      </div>
-      <div className="pxn-end">
-        {step('livrees', '#/commandes/livrees', t('orders.kpi.livre'), c?.delivered, 'ok')}
-        {step('annulees', '#/commandes/annulees', t('orders.kpi.annule'), c ? c.cancelledConf + c.back : undefined, 'bad')}
-      </div>
+    <nav className="pxn-ends" aria-label={t('nav.sub.termine')}>
+      {tile('livrees', 'checkcircle', t('orders.kpi.livre'), c?.delivered, t('orders.kpi.livreS', { pct: pct(c ? c.delivered / Math.max(1, c.all) : null) }), 'ok')}
+      {tile('annulees', 'xcircle', t('orders.kpi.annule'), c ? c.cancelledConf + c.back : undefined, t('orders.kpi.annuleS', { conf: c?.cancelledConf ?? 0, ret: c?.back ?? 0 }), 'bad')}
     </nav>
   );
 }
@@ -514,21 +512,20 @@ function CompanySheet({ m, name, label, onClose, onShow }: { m: Agg; name: strin
 
 export function PhoneLivre({ onTable }: { onTable?: () => void }) {
   const { t } = useTranslation();
-  const { has } = useSession();
   const wide = !useIsPhone();
   const per = usePeriod();
   const [f, setF] = useState<PF>(NO_F);
   const { ref, show } = useShow(f, setF);
-  // the money (cashed, fees, net): the store's own team; not an agency (the seller's money), not every seller together
-  const agency = useInAgency();
+  // the money (cashed, fees, net): the Super admin view only — the store's Administrateur and Vendeur (owner's choice, 27
+  // Nov 2026: Confirmation's three views here too); never an agency (the seller's money), not every boutique together
   const together = useScope() === 'all';
-  const money = has('suivi', 'depot') && !agency && !together;
+  const money = useConfView() === 'super' && !together;
   const rep = useRpc('orders.deliveredReport', per.range, { enabled: money });
   return (
     // « solo »: no money on the left (a confirmation agent, an agency): the cards take the whole width on a computer
     <div className={`pxn${wide ? ' wide' : ''}${money ? '' : ' solo'}`}>
       <div className="pxn-top">
-        <Road on="livrees" />
+        <DoneTiles on="livrees" />
         <PeriodBar per={per} />
         {wide && onTable && <ViewSwitch mode="cards" onChange={(m) => m === 'table' && onTable()} />}
       </div>
@@ -676,13 +673,16 @@ function BackStats({ r, label, f, show }: { r: CRep['returns']; label: string | 
             <h4 className="pxn-sub">{t('orders.ph.reasons')}</h4>
             <Bars total={r.n} items={reasons} />
             <dl className="pxn-lines">
-              <div className="m">
-                <dt>
-                  {t('orders.ph.cost')}
-                  {r.swaps > 0 && <small>{t('orders.bilan.swapsS', { count: r.swaps, v: da(r.swapFees) })}</small>}
-                </dt>
-                <dd className="ltr">− {da(r.fees)}</dd>
-              </div>
+              {/* what the returns cost: the shop's money, sent to the Super admin view only */}
+              {r.fees !== null && (
+                <div className="m">
+                  <dt>
+                    {t('orders.ph.cost')}
+                    {r.swaps > 0 && <small>{t('orders.bilan.swapsS', { count: r.swaps, v: da(r.swapFees ?? 0) })}</small>}
+                  </dt>
+                  <dd className="ltr">− {da(r.fees)}</dd>
+                </div>
+              )}
               <div>
                 <dt>{t('orders.ph.backValue')}</dt>
                 <dd className="ltr">{da(r.amount)}</dd>
@@ -694,12 +694,12 @@ function BackStats({ r, label, f, show }: { r: CRep['returns']; label: string | 
       {r.companies.length > 0 && (
         <section className="pxn-card" aria-labelledby="pxn-bco-h">
           <Head id="pxn-bco-h" title={t('orders.ph.byCompany')} aside={label} />
-          <div className="pxn-tb">
+          <div className={`pxn-tb${r.fees === null ? ' nocost' : ''}`}>
             <div className="pxn-tr pxn-th" aria-hidden="true">
               <span>{t('orders.ph.colCompany')}</span>
               <span>{t('orders.ph.colReturns')}</span>
               <span>{t('orders.ph.colRate')}</span>
-              <span>{t('orders.ph.colCost')}</span>
+              {r.fees !== null && <span>{t('orders.ph.colCost')}</span>}
             </div>
             {r.companies.map((c) => {
               const k = coKey(c);
@@ -709,7 +709,7 @@ function BackStats({ r, label, f, show }: { r: CRep['returns']; label: string | 
                   key={k}
                   type="button"
                   className={`pxn-tr${f.company === k ? ' on' : ''}`}
-                  aria-label={t('orders.ph.backCoAria', { name: nm, n: n(c.returns), d: n(c.delivered), pct: pct(c.rate), v: da(c.fees) })}
+                  aria-label={c.fees === null ? t('orders.ph.backCoAriaRate', { name: nm, n: n(c.returns), d: n(c.delivered), pct: pct(c.rate) }) : t('orders.ph.backCoAria', { name: nm, n: n(c.returns), d: n(c.delivered), pct: pct(c.rate), v: da(c.fees) })}
                   onClick={() => show({ company: k })}
                 >
                   <span className="pxn-nm">
@@ -721,44 +721,41 @@ function BackStats({ r, label, f, show }: { r: CRep['returns']; label: string | 
                     <b className="ltr">{pct(c.rate)}</b>
                     <i style={{ width: `${Math.round((c.rate ?? 0) * 100)}%` }} />
                   </span>
-                  <span className="ltr">{n(c.fees)}</span>
+                  {c.fees !== null && <span className="ltr">{n(c.fees)}</span>}
                 </button>
               );
             })}
           </div>
-          <p className="pxn-note">{t('orders.ph.backHow')}</p>
+          <p className="pxn-note">{t(r.fees === null ? 'orders.ph.backHowRate' : 'orders.ph.backHow')}</p>
         </section>
       )}
     </>
   );
 }
 
-/** How many orders the list would show (for someone who cannot see the stats). */
-function useTotal(input: ListFilter, enabled: boolean) {
-  // the whole number (totalAll: the old finished orders too, owner 25 Nov 2026), not only the 30 days the list shows
-  const d = useRpc('orders.list', { ...input, pageSize: 1 }, { enabled }).data;
-  return d?.totalAll ?? d?.total;
-}
-
-/** `start`: the tab open first (the old « Retournées » page opens on the returns); otherwise the last one used. */
+/**
+ * `start`: the tab open first (the old « Retournées » page opens on the returns); otherwise the last one used, and the
+ * first time the person's own part (a suivi or dépôt agent: the returns; the confirmation: its cancellations).
+ */
 export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 'conf' | 'back' }) {
   const { t } = useTranslation();
   const { has } = useSession();
   const wide = !useIsPhone();
   const per = usePeriod();
-  const [view, setView] = useState<'conf' | 'back'>(() => start ?? (store.get('orders-ph-view') === 'back' ? 'back' : 'conf'));
+  const [view, setView] = useState<'conf' | 'back'>(() => {
+    const last = store.get('orders-ph-view');
+    return start ?? (last === 'back' || last === 'conf' ? last : has('confirmation') ? 'conf' : 'back');
+  });
   const [f, setF] = useState<PF>(NO_F);
   const { ref, show } = useShow(f, setF);
-  // why orders are lost (the report): the store's own team, one shop at a time (it holds the seller's return costs)
-  const agency = useInAgency();
+  // why orders are lost (the report): every view, each one on his own orders (a manager his team's, an agency its own;
+  // « Tous les vendeurs » and « Toutes les boutiques » add the shops up) — owner's choice, 27 Nov 2026. What the returns
+  // cost is the shop's money: the server sends it to the Super admin view only.
   const together = useScope() === 'all';
-  const can = has('suivi', 'depot', 'agent_manager') && !agency && !together;
   // « Swap » on a parcel coming back, always (Suivi's rule): here too
   const swap = useSwap();
-  const rep = useRpc('orders.cancelReport', per.range, { enabled: can });
-  const r = can ? rep.data : undefined;
-  const nConf = useTotal(listInput('conf', per.range, NO_F, '', 1), !can);
-  const nBack = useTotal(listInput('back', per.range, NO_F, '', 1), !can);
+  const rep = useRpc('orders.cancelReport', per.range);
+  const r = rep.data;
   const pick = (v: 'conf' | 'back') => {
     setView(v);
     store.set('orders-ph-view', v);
@@ -776,30 +773,29 @@ export function PhoneAnnule({ onTable, start }: { onTable?: () => void; start?: 
   return (
     <div className={`pxn${wide ? ' wide' : ''}`}>
       <div className="pxn-top">
-        <Road on="annulees" />
+        <DoneTiles on="annulees" />
         <PeriodBar per={per} />
         {wide && onTable && <ViewSwitch mode="cards" onChange={(m) => m === 'table' && onTable()} />}
       </div>
       <div className="pxn-views" role="tablist" aria-label={t('orders.kpi.annule')}>
-        {tile('conf', 'ban', t('orders.ph.atConf'), r ? r.conf.n : nConf, r?.conf.rate, 'orders.ph.confRate')}
-        {tile('back', 'undo', t('orders.ph.returns'), r ? r.returns.n : nBack, r?.returns.rate, 'orders.ph.backRate')}
+        {tile('conf', 'ban', t('orders.ph.atConf'), r?.conf.n, r?.conf.rate, 'orders.ph.confRate')}
+        {tile('back', 'undo', t('orders.ph.returns'), r?.returns.n, r?.returns.rate, 'orders.ph.backRate')}
       </div>
       <div id="pxn-vp" role="tabpanel" aria-labelledby={`pxn-v-${view}`} className="pxn-vp">
         <div className="pxn-side">
         {/* who is responsible for the returns (the chiefs and the managers; the procedure says who sees what) */}
         {view === 'back' && !together && <Responsible range={per.range} label={per.label} />}
-        {can &&
-          (rep.error ? (
-            <ErrorBox error={rep.error} onRetry={() => rep.refetch()} />
-          ) : !r ? (
-            <section className="pxn-card">
-              <Loading />
-            </section>
-          ) : view === 'conf' ? (
-            <ConfStats r={r.conf} label={per.label} f={f} show={show} />
-          ) : (
-            <BackStats r={r.returns} label={per.label} f={f} show={show} />
-          ))}
+        {rep.error ? (
+          <ErrorBox error={rep.error} onRetry={() => rep.refetch()} />
+        ) : !r ? (
+          <section className="pxn-card">
+            <Loading />
+          </section>
+        ) : view === 'conf' ? (
+          <ConfStats r={r.conf} label={per.label} f={f} show={show} />
+        ) : (
+          <BackStats r={r.returns} label={per.label} f={f} show={show} />
+        )}
         </div>
         <div ref={ref} className="pxn-anchor pxn-main">
           <PhoneList key={view} kind={view} title={view === 'conf' ? t('orders.cancelledConf') : t('orders.ph.listBack')} per={per} f={f} setF={setF} act={view === 'back' ? swap.button : undefined} />

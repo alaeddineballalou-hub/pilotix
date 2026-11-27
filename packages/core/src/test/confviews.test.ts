@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx } from '../index';
-import { BANNER_FAN, FANOUT, type Part } from '../modules/fanout';
+import { BANNER_FAN, CANCEL_REPORT_FAN, FANOUT, type Part } from '../modules/fanout';
 import { EMAILS, setup } from './harness';
 
 let as: (email: string) => Promise<Ctx>;
@@ -96,4 +96,43 @@ test('the late-calls banner over every seller: the numbers add up, the next cust
   assert.equal(b.fresh, 3);
   assert.equal(b.next.ref, 'PX7', 'the soonest deadline');
   assert.equal(b.next.seller.id, 2, 'with its seller');
+});
+
+test('Terminé › Annulé: everyone reads « Raisons des annulations » on his own orders; the money is the Super admin view\'s', async () => {
+  const now = Date.now();
+  const range = { from: new Date(now - 60 * 86_400_000).toISOString(), to: new Date(now + 86_400_000).toISOString() };
+  const owner: any = await call('orders.cancelReport', await at(EMAILS.vendeur, now), range);
+  const admin: any = await call('orders.cancelReport', await at(EMAILS.admin, now), range);
+  const mgr: any = await call('orders.cancelReport', await at(EMAILS.manager, now), range);
+  const agent: any = await call('orders.cancelReport', await at(EMAILS.conf, now), range);
+  assert.equal(typeof owner.returns.fees, 'number', 'the owner sees what the returns cost');
+  assert.equal(typeof admin.returns.fees, 'number', 'the administrator too');
+  for (const [who, r] of [['manager', mgr], ['agent', agent]] as const) {
+    assert.equal(r.returns.fees, null, `${who}: no shop money`);
+    assert.equal(r.returns.swapFees, null);
+    for (const c of r.returns.companies) assert.equal(c.fees, null);
+  }
+  assert.ok(agent.conf.n <= mgr.conf.n + owner.conf.n && agent.conf.n <= owner.conf.n, 'an agent counts only his own orders');
+  // every agent row of his report is himself
+  const me = (await at(EMAILS.conf, now)).session.profile.id;
+  for (const a of agent.conf.agents) assert.equal(a.id, me);
+});
+
+test('Terminé › Annulé over every shop: the reasons add up, the money only when every shop sent it', () => {
+  const rep = (n: number, fees: number | null, reasons: [string, number][]) => ({
+    conf: { n, amount: n * 1000, confirmed: 10, rate: null, byStatus: { cancelled: n }, reasons: { top: reasons.map(([reason, k]) => ({ reason, n: k })), others: 1, none: 2 }, agents: [{ id: 7, name: 'Samira', n, confirmed: 10, rate: 0.1 }] },
+    returns: { n: 2, returning: 1, returned: 1, amount: 5000, fees, swaps: 0, swapFees: fees === null ? null : 0, delivered: 20, rate: null, reasons: { top: [], others: 0, none: 2 }, companies: [] },
+  });
+  const both = CANCEL_REPORT_FAN.merge([part(1, rep(3, 400, [['Prix trop cher', 2], ['Changé d’avis', 1]])), part(2, rep(2, 300, [['Prix trop cher', 1]]))], {});
+  assert.equal(both.conf.n, 5);
+  assert.equal(both.conf.confirmed, 20);
+  assert.equal(both.conf.rate, 5 / 25);
+  assert.deepEqual(both.conf.reasons.top[0], { reason: 'Prix trop cher', n: 3 });
+  assert.equal(both.conf.reasons.none, 4);
+  assert.equal(both.conf.byStatus.cancelled, 5);
+  assert.deepEqual(both.conf.agents, [], 'the agents table stays one shop\'s');
+  assert.equal(both.returns.fees, 700);
+  assert.equal(both.returns.rate, 4 / 44);
+  const noMoney = CANCEL_REPORT_FAN.merge([part(1, rep(3, null, [])), part(2, rep(2, null, []))], {});
+  assert.equal(noMoney.returns.fees, null);
 });

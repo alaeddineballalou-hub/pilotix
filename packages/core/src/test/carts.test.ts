@@ -38,7 +38,8 @@ test('the rule: a cart is left out unless confirmed; the other orders always cou
 
 test('Confirmation › Statistiques, the Accueil and Landing pages › Abandonnées', async () => {
   const admin = await as(EMAILS.admin);
-  const mgr = await as(EMAILS.manager);
+  // the shop's Statistiques (since 27 Nov 2026 a manager's count only his team's orders: these are the administrator's)
+  const mgr = admin;
   // a day of its own for Confirmation › Statistiques (by creation day), a window around now for the Accueil (by event)
   const day = { per: 'custom' as const, from: '2025-03-10', to: '2025-03-10' };
   const win = { from: new Date(Date.now() - 86_400_000).toISOString(), to: new Date(Date.now() + 86_400_000).toISOString() };
