@@ -425,7 +425,7 @@
     "mine": "Mes confirmées aujourd’hui",
     "mineSub": "{{n}} annulée(s)",
     "none": "Plus aucune commande à appeler pour le moment 🎉",
-    "start": "Appuyez sur « Commande suivante » pour commencer.",
+    "start": "Ouvrez une commande de la liste pour commencer.",
     "received": "reçue {{when}} · {{channel}}",
     "calls": "{{n}} appel(s) déjà",
     "others": "{{n}} autre(s) commande(s) avec ce numéro",

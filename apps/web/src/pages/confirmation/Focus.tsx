@@ -21,7 +21,8 @@ const CHOICES: StatusChoice[] = ['confirmed', 'try1', 'callback', 'postponed', '
 const CLS: Partial<Record<StatusChoice, string>> = { confirmed: 'ok big', try1: 'big', no_stock: 'warn', cancelled: 'danger' };
 
 /**
- * onNext: « Commande suivante » given by the page (an agency's « Tous les vendeurs »: the next order of any seller);
+ * onNext: the next order once a call is saved (« auto »), given by the page (an agency's « Tous les vendeurs »: the next
+ * order of any seller); no « Commande suivante » button (the owner, 27 Nov 2026);
  * seller: the order's seller, shown in the title.
  */
 export function Focus({ initialId, onClose, onNext, seller, allSellers }: { initialId: number | null; onClose: () => void; onNext?: () => Promise<void>; seller?: string; allSellers?: boolean }) {
@@ -90,9 +91,6 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
               />
               {t('confirmation.focus.auto')}
             </label>
-            <button type="button" className="btn primary big" disabled={busy} onClick={next}>
-              {t('confirmation.next')}
-            </button>
             <button type="button" className="btn ghost" onClick={onClose}>
               {t('common.close')}
             </button>

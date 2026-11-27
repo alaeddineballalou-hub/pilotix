@@ -167,8 +167,6 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
   /** a menu item's name (a partner's space names some of its pages its own way) */
   const label = (id: string) =>
     partner ? t(`agency.${space === 'marketer' ? 'mnav' : 'nav'}.${id}`, { defaultValue: t(`agency.nav.${id}`, { defaultValue: t(`nav.${id}`, { defaultValue: '' }) }) }) : t(`nav.${id}`);
-  /** an agency's person who calls customers (its chief and supervisors too) */
-  const calls = agency && (isAdmin || roles.some((r) => r === 'confirmation' || r === 'agent_manager'));
 
   // A new order that came by itself (a landing page, the shop's site, Pilot Message): a toast and a chime for the
   // people who confirm orders (sound: once the page was touched) — from any of their boutiques, with its name.
@@ -391,21 +389,12 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
           {/* the backup door: a chip while Pilotix is opened through it (lib/door) */}
           <DoorChip />
           {partner && SELLER_PAGES[space].has(page) && <SellerSwitch />}
-          {calls && page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && (
-            <button type="button" className="btn primary pxs-new pxs-next" title={t('confirmation.next').replace(/\s*[→←]\s*$/, '')} onClick={() => window.dispatchEvent(new Event('px:next-order'))}>
-              <span className="pxs-t">{t('confirmation.next').replace(/\s*[→←]\s*$/, '')}</span>
-              <Icon name="chevr" className="pxs-ar" />
-            </button>
-          )}
           {has('confirmation', 'suivi', 'depot') && <GlobalSearch />}
           {/* the Community manager: « + Nouvelle commande » for a call (a chat's order: « Créer la commande » in the chat) */}
           {has('confirmation', 'suivi', 'depot', 'cm') && (
-            page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && has('confirmation') ? (
-              <button type="button" className="btn primary pxs-new pxs-next" title={t('confirmation.next').replace(/\s*[→←]\s*$/, '')} onClick={() => window.dispatchEvent(new Event('px:next-order'))}>
-                <span className="pxs-t">{t('confirmation.next').replace(/\s*[→←]\s*$/, '')}</span>
-                <Icon name="chevr" className="pxs-ar" />
-              </button>
-            ) : page === 'sav' ? (
+            // Confirmation's own « + Nouvelle commande » is on its list (no « Commande suivante » anywhere: the owner,
+            // 27 Nov 2026 — agents open their orders from the list)
+            page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && has('confirmation') ? null : page === 'sav' ? (
               rightOn('act:sav.create') && tabOn('sav', 'nouveau') && (
                 <button type="button" className="btn primary pxs-new" title={t('sav.new').replace(/^\+\s*/, '')} onClick={() => (location.hash = '#/sav/nouveau')}>
                   +<span className="pxs-t"> {t('sav.new').replace(/^\+\s*/, '')}</span>

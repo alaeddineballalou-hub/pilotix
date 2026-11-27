@@ -425,7 +425,7 @@
     "mine": "My confirmed today",
     "mineSub": "{{n}} cancelled",
     "none": "No more orders to call for now 🎉",
-    "start": "Press “Next order” to start.",
+    "start": "Open an order from the list to start.",
     "received": "received {{when}} · {{channel}}",
     "calls": "{{n}} call(s) already",
     "others": "{{n}} other order(s) with this number",

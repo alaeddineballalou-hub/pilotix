@@ -612,13 +612,6 @@ export function Queue({
   const canNext = (sub === 'nouvelles' || sub === 'attente') && has('confirmation');
   /** an agent sees only the orders given to him; managers and the owner see more (an agency's chiefs: all of its own) */
   const seesAll = manager;
-  // "Commande suivante" lives in the top header (Shell): it asks this list to open the next order
-  useEffect(() => {
-    if (!canNext) return;
-    const on = () => goNext([...open].pop());
-    window.addEventListener('px:next-order', on);
-    return () => window.removeEventListener('px:next-order', on);
-  });
 
   return (
     <>
@@ -635,17 +628,12 @@ export function Queue({
           <div className="row">
             {combined?.chip}
             {!combined && has('confirmation') && !session?.profile.agencyId && rightOn('act:orders.create') && (
-              <button type="button" className={`btn ${canNext ? 'px-qnew' : 'primary'}`} onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
+              <button type="button" className="btn primary" onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
                 + {t('confirmation.newOrder')}
               </button>
             )}
-            {/* the same "Commande suivante" as in the top header */}
-            {canNext && (
-              <button type="button" className="btn primary px-qnext" onClick={() => goNext([...open].pop())}>
-                {t('confirmation.next').replace(/\s*[→←]\s*$/, '')}
-                <Icon name="chevr" className="px-qnext-ar" />
-              </button>
-            )}
+            {/* no « Commande suivante » button (the owner, 27 Nov 2026): agents open their orders from the list; a call
+                saved still opens the next one (goNext) */}
           </div>
         </div>
         {combined?.bar}
@@ -879,12 +867,6 @@ export function Queue({
                   stages={sub === 'confirmees'}
                   dots={sub === 'attente' ? list.data.tries ?? 3 : undefined}
                 />
-                {canNext && !picking && (
-                  <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>
-                    {t('confirmation.ph.next')}
-                    <Icon name="chevr" />
-                  </button>
-                )}
                 {picking && (
                   <PickBar
                     n={selected.length}

@@ -792,9 +792,11 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
         {showAssign && <AssignSwitch value={assign} onChange={setAssign} counts={q.data?.assign} />}
         {combined?.chip}
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
-        {!combined && canFollow && (isAlertTab(tab) || tab === 'bloques') && !cards && !!q.data?.rows.length && (
+        {/* no « Alerte suivante » button (the owner, 27 Nov 2026): the alerts are opened from the list; « Bloqué
+            suivant » stays */}
+        {!combined && canFollow && tab === 'bloques' && !cards && !!q.data?.rows.length && (
           <button type="button" className="btn primary sv-next" disabled={nexting} onClick={nextAlert}>
-            {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')} <Icon name="chevr" />
+            {t('suivi.stuck.next')} <Icon name="chevr" />
           </button>
         )}
         {!agency && !combined && tab === 'enlivraison' && canFollow && <SyncButton />}
@@ -843,9 +845,9 @@ export function List({ tab, combined }: { tab: ListTab; combined?: CombinedSuivi
           return (
             <>
               <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} act={cardAct} />
-              {!combined && canFollow && (isAlertTab(tab) || tab === 'bloques') && rows.length > 0 && (
+              {!combined && canFollow && tab === 'bloques' && rows.length > 0 && (
                 <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
-                  {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')}
+                  {t('suivi.stuck.next')}
                   <Icon name="chevr" />
                 </button>
               )}
@@ -1111,11 +1113,8 @@ export function ClairList({ tab, allSellers }: { tab: ClairTab; allSellers?: { c
         <h2>{title}</h2>
         {showAssign && <AssignSwitch value={assign} onChange={setAssign} counts={q.data?.assign} />}
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.total }) : ''}</span>
-        {canFollow && working && !phone && !!rows.length && (
-          <button type="button" className="btn primary sv-next" disabled={nexting} onClick={nextAlert}>
-            {t('suivi.ph.next')} <Icon name="chevr" />
-          </button>
-        )}
+        {/* no « Alerte suivante » button (the owner, 27 Nov 2026): an alert is opened from its line; one treated still
+            opens the next (nextAlert) */}
       </div>
       {/* a phone: the counters first, under the title (seen without scrolling); a computer: as the design, under the filters */}
       {phone && <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />}
@@ -1175,12 +1174,6 @@ export function ClairList({ tab, allSellers }: { tab: ClairTab; allSellers?: { c
           anyAgent={picked.some((o) => o.followAgentId)}
           onGive={(v) => give(picked, v ? Number(v) : null)}
         />
-      )}
-      {phone && canFollow && working && rows.length > 0 && !picking && (
-        <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
-          {t('suivi.ph.next')}
-          <Icon name="chevr" />
-        </button>
       )}
       {q.data && <Pager page={page} pageSize={100} total={q.data.total} onPage={setPage} />}
       {/* the demo's carrier simulation: after the list (the counters and the lines come first) */}
