@@ -14,7 +14,7 @@ import { Empty, ErrorBox, Field, Help, Icon, IconName, Loading } from '../../ui/
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BuyCredits, CreditPill } from './Credits';
-import { adSize, AiPhoto, aiPhoto, download, drawLanding, drawPoster, exampleBackground, exampleShot, fileImage, imageFrom, Logo, makeBackground, savable, slices } from './studioimg';
+import { adSize, AiPhoto, aiPhoto, download, drawLanding, drawPoster, exampleBackground, exampleShot, fileImage, imageFrom, Logo, makeBackground, picturesFont, savable, slices } from './studioimg';
 import './studio.css';
 
 const K = 'studio.';
@@ -1213,6 +1213,7 @@ function BgMaker({ full, onUse }: { full: boolean; onUse: (img: HTMLImageElement
     try {
       const r = await rpc('createur.studioMakeBg', note.trim() ? { note: note.trim() } : {});
       if (r.demo) {
+        await picturesFont();
         const c = exampleBackground(t(K + 'example'));
         setMade({ src: c.toDataURL('image/jpeg', 0.85), img: c, demo: true });
       } else {

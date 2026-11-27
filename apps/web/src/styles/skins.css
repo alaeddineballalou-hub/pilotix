@@ -1,5 +1,6 @@
 /* The Pilotix look ("Doux", chosen from the 5 previews): soft and roomy, made for phones and fingers —
-   bigger text and buttons, round shapes, tinted number boxes, Readex Pro for Latin and Arabic.
+   bigger text and buttons, round shapes, tinted number boxes, « Pilotix Sans » letters: Rubik for Latin, Alexandria
+   for Arabic (fonts.css; Readex Pro for both until 27 Nov 2026).
    The page always carries data-skin="doux" (index.html and main.tsx); the --sk-* values below are drawn by the
    shared rules further down. Text colours reach 4.5:1 or more (navy on orange, never white on orange). */
 
@@ -14,7 +15,7 @@ html[data-skin] {
 
 /* ---- Doux values ---- */
 html[data-skin="doux"] {
-  --f: "Readex Pro", system-ui, sans-serif; --f-display: "Readex Pro", system-ui, sans-serif;
+  --f: "Pilotix Sans", system-ui, sans-serif; --f-display: "Pilotix Sans", system-ui, sans-serif; --f-body: "Pilotix Sans", system-ui, sans-serif;
   --bg: #F6F4F1; --surface: #FFFFFF; --raise: #FBFAF8; --line: #ECE6DE; --ink: #1F2633; --sky-soft: #F3EFEA; --field: #FFFFFF;
   --sk-bg: #F6F4F1; --sk-surface: #FFFFFF; --sk-line: #ECE6DE;
   --sk-side-bg: #FFFFFF; --sk-side-line: #ECE6DE; --sk-side-ink: #4F5663; --sk-side-strong: #1F2633; --sk-side-hover: #F6F1EB;
@@ -39,9 +40,10 @@ html[data-skin="doux"][data-theme="dark"] {
   --sk-th-bg: #20232A; --sk-th-ink: #B5BCC8; --sk-row-hover: #22262E;
   --sk-tab-on-bg: #3A2E14; --sk-tab-on-ink: #FFD08A;
 }
-html[data-skin="doux"] body { font-size: 16px; }
+/* every digit the same width (Rubik's are not by default): prices in a list line up, counters and timers keep still */
+html[data-skin="doux"] body { font-size: 16px; font-variant-numeric: tabular-nums; }
 @media (min-width: 901px) { html[data-skin="doux"] .shell:not(.px-folded) { --side: 256px; } }
-html[data-skin="doux"][lang="ar"] { --f: "Readex Pro", system-ui, sans-serif; --f-display: "Readex Pro", system-ui, sans-serif; }
+html[data-skin="doux"][lang="ar"] { --f: "Pilotix Sans", system-ui, sans-serif; --f-display: "Pilotix Sans", system-ui, sans-serif; --f-body: "Pilotix Sans", system-ui, sans-serif; }
 
 /* =========================================================================================== shared rules */
 html[data-skin][data-theme] body, html[data-skin][data-theme] .shell, html[data-skin][data-theme] .content { background: var(--sk-bg) !important; color: var(--ink); }

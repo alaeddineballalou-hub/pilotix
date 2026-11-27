@@ -37,6 +37,8 @@ import { SelectPicker } from './ui/SelectPicker';
 import { PageGuard } from './ui/PageGuard';
 import { startWatch } from './lib/watch';
 import { arriveThroughDoor, demoDoor, startDoor } from './lib/door';
+// the app's letters (Rubik for Latin, Alexandria for Arabic), shipped with the app
+import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/legacy.css';
 import './styles/pilotix.css';

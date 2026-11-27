@@ -158,6 +158,7 @@ export async function adSize(src: string, kind: 'square' | 'story'): Promise<str
  * can be tried. Clearly marked: it is not what the AI makes.
  */
 export async function exampleShot(bgB64: string, photo: AiPhoto, logo: Logo | null, variant: number, label: string): Promise<string> {
+  await picturesFont();
   const bg = await loadImage(`data:image/jpeg;base64,${bgB64}`);
   const p = await loadImage(`data:image/jpeg;base64,${photo.data}`);
   const [c, g] = canvas(OUT_W, OUT_H);
@@ -215,6 +216,13 @@ export interface Poster {
 const FONT = '"Readex Pro", system-ui, sans-serif';
 const money = (n: number) => String(Math.round(n));
 
+/** Readex Pro stays the letters of every picture drawn here. Since the app's own letters moved to Rubik and
+ *  Alexandria (27 Nov 2026, styles/fonts.css), nothing on the screen loads it any more, and a canvas never waits for a
+ *  font: load its Latin and Arabic files before drawing. */
+export function picturesFont(): Promise<unknown> {
+  return document.fonts?.load(`400 32px ${FONT}`, 'Aa سيّر').catch(() => undefined) ?? Promise.resolve();
+}
+
 function pill(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   g.beginPath();
   g.roundRect(x, y, w, h, r);
@@ -233,8 +241,7 @@ function fit(g: CanvasRenderingContext2D, text: string, weight: number, size: nu
 
 /** The poster, 1080×1350, drawn on the hero photo; every price and number is Pilotix's, written here. */
 export async function drawPoster(heroSrc: string, p: Poster): Promise<string> {
-  await document.fonts?.load(`800 60px ${FONT}`).catch(() => undefined);
-  await document.fonts?.load(`600 30px ${FONT}`).catch(() => undefined);
+  await picturesFont();
   const hero = await loadImage(heroSrc);
   const colors = await Promise.all(p.colors.slice(0, 3).map(async (c) => ({ ...c, img: await loadImage(c.src).catch(() => null) })));
   const W = OUT_W;
@@ -476,8 +483,7 @@ function lines(g: CanvasRenderingContext2D, text: string, max: number): string[]
  * price in a picture goes out of date).
  */
 export async function drawLanding(p: Landing): Promise<string> {
-  await document.fonts?.load(`800 60px ${FONT}`).catch(() => undefined);
-  await document.fonts?.load(`500 30px ${FONT}`).catch(() => undefined);
+  await picturesFont();
   const W = OUT_W;
   const pad = 70;
   const hero = p.hero ? await loadImage(p.hero).catch(() => null) : null;
@@ -659,7 +665,8 @@ export async function slices(src: string, max = OUT_H): Promise<string[]> {
   return out;
 }
 
-/** The browser preview's EXAMPLE background (no AI there): a plain room with a wooden table in front. */
+/** The browser preview's EXAMPLE background (no AI there): a plain room with a wooden table in front. Drawn at once:
+ *  its caller waits for picturesFont() first. */
 export function exampleBackground(label: string): HTMLCanvasElement {
   const [c, g] = canvas(1280, 1600);
   g.fillStyle = '#f6efe6';
