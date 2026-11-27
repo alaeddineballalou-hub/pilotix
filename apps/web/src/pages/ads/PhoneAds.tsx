@@ -553,6 +553,12 @@ function ProdCard({ p, onOpen }: { p: Prod; onOpen: () => void }) {
         <b>{p.name}</b>
         <span className={`pxm-adv ${tone}`}>{t(`ads.advice.${p.advice.k}`)}</span>
       </span>
+      {/* the leads (every order of the product, its abandoned carts in it) and what one costs */}
+      <small className="pxm-leads">
+        <b>{t('mkph.leadsN', { count: p.money.n })}</b>
+        {!!p.money.cart && ` · ${t('ads.leadsCarts', { count: p.money.cart })}`}
+        {!!p.money.n && ` · ${t('mkph.cplShort', { v: dz(p.money.pub / p.money.n) })}`}
+      </small>
       <span className="pxm-st4">
         <span>
           <small>{t('mkph.k.spend')}</small>

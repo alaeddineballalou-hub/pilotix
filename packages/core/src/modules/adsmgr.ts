@@ -10,6 +10,7 @@ import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, META_TOKEN_KEY, setRaw } from './admin';
 import { listPhones, listSwitches } from './landinglists';
+import { linkAdsets, shopAddress } from './adlinks';
 import { addDays, adsetDiagnostic, confirmedOrder, dayStart, fxTable, insights, isOwner, moneyOf, ordersOf, productAdvice, sumDays, syncMeta, visibleAdsets } from './ads';
 import {
   AUDIENCE_DEFAULT_ON,
@@ -1022,6 +1023,8 @@ interface MetaTagAd {
   needs: boolean;
   kind: TagKind;
   empty?: boolean;
+  /** where it sends people (null: an existing post, a message ad…) */
+  link?: string | null;
 }
 
 /** One check (server): the young ads get the parameters, the others without them are listed. The demo shows its own. */
@@ -1032,7 +1035,7 @@ export async function tagRun(ctx: Ctx): Promise<TagState> {
 async function tagRunNow(ctx: Ctx): Promise<TagState> {
   const s = await tagState(ctx.db);
   // ads not linked to Meta: no ad to read (not an error)
-  if (!s.on || !ctx.server || !(await metaLinked(ctx.db))) return s;
+  if (!ctx.server || !(await metaLinked(ctx.db))) return s;
   const save = async (next: TagState) => {
     await setRaw(ctx.db, TAG_KEY, next);
     return next;
@@ -1042,8 +1045,14 @@ async function tagRunNow(ctx: Ctx): Promise<TagState> {
     ads = ((await ctx.server.meta('tagAds', {}, ctx)) as { ads: MetaTagAd[] }).ads ?? [];
   } catch (e: any) {
     // nothing read: what was found last time stays on the page
-    return save({ ...s, checkedAt: stamp(ctx), error: String(e?.message ?? e).slice(0, 300) });
+    return s.on ? save({ ...s, checkedAt: stamp(ctx), error: String(e?.message ?? e).slice(0, 300) }) : s;
   }
+  // Ad sets › Produit by itself: each ad set follows the landing pages its ads send people to (adlinks.ts), even with
+  // the URL parameters turned off (they only decide whether Pilotix copies an ad's créa)
+  await shopAddress(ctx)
+    .then((a) => linkAdsets(ctx.db, ads, a))
+    .catch(() => null);
+  if (!s.on) return s;
   const now = ctx.now();
   const fixed = [...s.fixed];
   const tries: TagState['tries'] = {};

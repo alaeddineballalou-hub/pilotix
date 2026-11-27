@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
-import { adTagsLack, creaEmpty, feedKey, groupsKey, needsTags, tagKindOf, taggedCopy, tagsLack, type LaunchPlan } from './modules/pilotads';
+import { adTagsLack, creaEmpty, creativeLink, feedKey, groupsKey, needsTags, tagKindOf, taggedCopy, tagsLack, type LaunchPlan } from './modules/pilotads';
 import { AppError, Ctx } from './rpc';
 
 /** Meta's current Marketing API (v21.0 ended for ads on 9 Sep 2025; v26.0 came out on 29 Jul 2026). */
@@ -654,11 +654,12 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   // ---- URL parameters on ads made by hand (./modules/adsmgr.ts › tagRun) ----
   /**
    * Every ad of the shop's ad accounts still in use (archived and deleted ones are left out): when Meta made it, its
-   * state, whether its orders would not know it (a website link without the ids) and the kind of its créa. An account
-   * that cannot be read is left out; all of them failing is an error.
+   * state, whether its orders would not know it (a website link without the ids), the kind of its créa and where it
+   * sends people (./modules/adlinks.ts links its ad set to that page's product). An account that cannot be read is left
+   * out; all of them failing is an error.
    */
   if (action === 'tagAds') {
-    const out: { id: string; name: string; campaign: string; adsetId: string; status: string | null; created: string | null; needs: boolean; kind: string; empty: boolean }[] = [];
+    const out: { id: string; name: string; campaign: string; adsetId: string; status: string | null; created: string | null; needs: boolean; kind: string; empty: boolean; link: string | null }[] = [];
     let read = 0;
     let firstError: unknown = null;
     for (const act of acts) {
@@ -682,6 +683,8 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
             kind: tagKindOf(x.creative),
             // nothing in its URL parameters: Meta adds its own numbers to the link (./modules/landing.ts › metaIdsOf reads them)
             empty: creaEmpty(x.creative),
+            // where it sends people (an existing post: null, Meta keeps the link on the post): ./modules/adlinks.ts
+            link: creativeLink(x.creative),
           });
         }
         read++;

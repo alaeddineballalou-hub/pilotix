@@ -245,9 +245,11 @@ export function Publicite(_: Partial<PageProps> = {}) {
                       <tr>
                         <th>{t('ads.colProduct')}</th>
                         <th className="num">{t('ads.colSpend')}</th>
+                        <th className="num">{t('ads.colLeads')}</th>
                         <th className="num">{t('ads.colConfirmed')}</th>
                         <th className="num">{t('ads.colDelivered')}</th>
                         <th className="num">{t('ads.colRate')}</th>
+                        <th className="num">{t('ads.colCpl')}</th>
                         <th className="num">{t('ads.colCpc')}</th>
                         <th className="num">{t('ads.colCpd')}</th>
                         <th className="num">{t('ads.colProfit')}</th>
@@ -261,6 +263,15 @@ export function Publicite(_: Partial<PageProps> = {}) {
                           <td className="num" data-l={t('ads.colSpend')}>
                             {usd(p.spendUsd)}
                           </td>
+                          {/* every order of the product, its abandoned carts in it (said under the number) */}
+                          <td className="num" data-l={t('ads.colLeads')}>
+                            {n(p.money.n)}
+                            {!!p.money.cart && (
+                              <small className="ad-cart" title={t('ads.leadsCartsTip')}>
+                                {t('ads.leadsCarts', { count: p.money.cart })}
+                              </small>
+                            )}
+                          </td>
                           <td className="num" data-l={t('ads.colConfirmed')}>
                             {n(p.money.c)}
                           </td>
@@ -269,6 +280,9 @@ export function Publicite(_: Partial<PageProps> = {}) {
                           </td>
                           <td className="num" data-l={t('ads.colRate')}>
                             {pct(p.money.c ? p.money.d / p.money.c : null)}
+                          </td>
+                          <td className="num" data-l={t('ads.colCpl')}>
+                            {fxOk ? dz(p.money.n ? p.money.pub / p.money.n : null) : '—'}
                           </td>
                           <td className="num" data-l={t('ads.colCpc')}>
                             {fxOk ? dz(p.money.c ? p.money.pub / p.money.c : null) : '—'}
@@ -455,6 +469,9 @@ function AdsetsCard({ d, owner, onPick, onOpen }: { d: Overview; owner: boolean;
           <span className="count">{d.adsets.length}</span>
           <Help text={(t('ads.diagRulesText', { returnObjects: true }) as string[]).join(' ')} />
         </h2>
+        <span className="note">
+          <Icon name="link" /> {t('ads.autoHelp')}
+        </span>
       </div>
       {!d.adsets.length ? (
         <Empty>{t('ads.noAdsets')}</Empty>
@@ -515,14 +532,20 @@ function AdsetsCard({ d, owner, onPick, onOpen }: { d: Overview; owner: boolean;
                     </span>
                   </td>
                   <td data-l={t('ads.colLinked')} onClick={(e) => e.stopPropagation()}>
+                    {/* linked by Pilotix from the landing pages its ads send people to (the link wins): no hand choice */}
                     {a.productIds.map((p) => (
-                      <span key={p} className="chip cp">
+                      <span key={p} className={`chip cp${a.linkAuto ? ' ad-auto' : ''}`} title={a.linkAuto ? t('ads.autoTip', { pages: a.linkPages.join(', ') || '—' }) : undefined}>
+                        {a.linkAuto && <Icon name="link" />}
                         {P.get(p) ?? `#${p}`}
                       </span>
                     ))}{' '}
-                    <button type="button" className="btn-mini" onClick={() => onPick({ id: a.id, name: a.name, productIds: a.productIds })}>
-                      {t('ads.pick')}
-                    </button>
+                    {a.linkAuto ? (
+                      <small className="ad-autonote">{t('ads.autoNote')}</small>
+                    ) : (
+                      <button type="button" className="btn-mini" onClick={() => onPick({ id: a.id, name: a.name, productIds: a.productIds })}>
+                        {t('ads.pick')}
+                      </button>
+                    )}
                   </td>
                   {owner && (
                     <td data-l={t('ads.colOwner')} onClick={(e) => e.stopPropagation()}>

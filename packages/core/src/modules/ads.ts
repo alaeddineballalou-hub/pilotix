@@ -16,8 +16,14 @@
 //  - The ads count confirmed orders only (the owner's rule, 24 Nov 2026: « in ads we count the confirmed only »). Every
 //    order count the pages show (Confirmées, coût par confirmée, livrées sur confirmées, par jour, par mois) is the orders
 //    the team confirmed (confirmed, or confirmed waiting for stock), on the day the order came in, like Meta's Purchase.
-//    The leads (every order received) only make the ratio « Qualité des leads » (Pilot Checks Q2: confirmed ÷ real
-//    leads). `n` (received) stays for the rules that still read it (productAdvice, the ad sets' target).
+//    The leads (every order received) make the ratio « Qualité des leads » (Pilot Checks Q2: confirmed ÷ real leads),
+//    and since 27 Nov 2026 the products table shows them: « Leads » (every order of the product, its abandoned carts
+//    in it — Pilotix makes each cart an order: landing.ts › sweepAbandoned) and « Coût / lead ». The costs the rules
+//    judge stay on the confirmed ones. `n` (received) stays for the rules that still read it (productAdvice, the ad
+//    sets' target).
+//  - An ad set's spend goes to its products by its ads (the owner's choice, 27 Nov 2026): each ad's spend counts for
+//    the product of the landing page it sends people to (adlinks.ts), an ad with no known page shares its spend
+//    equally between the ad set's products, as before.
 import { z } from 'zod';
 import { Db, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
@@ -26,6 +32,7 @@ import { getRaw, setRaw } from './admin';
 import { leadOf } from './leadkind';
 import { knownKg, ruleFee, swapFeeSql, weightRuleOf, type WeightRule } from './courierfees';
 import { checkRules } from './pilotchecks';
+import { adDaySpend, productShares } from './adlinks';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const Ym = z.string().regex(/^\d{4}-\d{2}$/);
@@ -139,6 +146,8 @@ export interface AdsetRow {
   groupId: number | null;
   marketerId: number | null;
   marketerName: string | null;
+  /** its products (or group) follow the landing pages its ads send people to (adlinks.ts): never chosen by hand */
+  linkAuto: boolean;
 }
 
 export async function visibleAdsets(ctx: Ctx, marketerId?: number | null): Promise<AdsetRow[]> {
@@ -161,6 +170,7 @@ export async function visibleAdsets(ctx: Ctx, marketerId?: number | null): Promi
       groupId: r.group_id === null || r.group_id === undefined ? null : num(r.group_id),
       marketerId: r.marketer_id === null ? null : num(r.marketer_id),
       marketerName: r.marketer_name ?? null,
+      linkAuto: !!r.link_auto,
     }))
     .filter(mine ? adsetInScope(ctx) : () => true);
 }
@@ -242,6 +252,8 @@ const MONEY_COLS = `o.id, o.created_at, o.conf_status, o.follow_status, o.total,
                  THEN (SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' ORDER BY e.at DESC, e.id DESC LIMIT 1) END AS conf_note,
             -- a parcel its company gave to another customer: its swap fee, counted here like a return fee
             ${swapFeeSql()} AS swap_fee,
+            -- an abandoned cart (carts.ts): one of the leads, said apart in the products table (older orders: their source)
+            (o.came IN ('abandoned', 'recovered') OR (o.came IS NULL AND o.source ~ '·\\s*abandonnée$')) AS is_cart,
             o.courier_fees AS cf`;
 
 /** Orders by their first product, for some products, created in [from, to] (Algiers days). */
@@ -280,7 +292,9 @@ async function withReturnWeight(db: Db, rows: any[]) {
 
 // ---------------------------------------------------------------- money
 export interface Money {
-  n: number; // orders received (leads): only the rules still read it, the pages count `c`
+  n: number; // orders received (leads): the products table's « Leads », and the rules that still read it
+  /** abandoned carts among the leads (`n`): « dont X paniers » */
+  cart?: number;
   c: number; // confirmed (confirmed, or confirmed waiting for stock): what the ads count
   /** cancelled by a real client: « Qualité des leads » = c ÷ (c + ref) */
   ref: number;
@@ -309,9 +323,10 @@ export const confirmedOrder = (o: { conf_status: unknown; conf_note?: string | n
 /** Profit of a set of orders, line by line (the original "Bénéfice réel · ligne par ligne"). share = fraction counted (marketer share). */
 export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1): Promise<Money> {
   const plans = await getSetting(db, 'payPlans');
-  let n = 0, c = 0, ref = 0, att = 0, d = 0, r = 0, x = 0, sw = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
+  let n = 0, cart = 0, c = 0, ref = 0, att = 0, d = 0, r = 0, x = 0, sw = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
   for (const o of orders) {
     n++;
+    if (o.is_cart === true) cart++;
     // what became of the lead (Confirmation › Statistiques' own rule): confirmed, refused by a real client, an attack
     const lead = leadOf(String(o.conf_status), o.conf_note ?? null);
     if (lead === 'confirmed') c++;
@@ -338,7 +353,7 @@ export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1):
     } else if (fs && ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning'].includes(fs)) enRoute++;
   }
   const k = (v: number) => Math.round(v * share);
-  const m = { n: k(n), c: k(c), ref: k(ref), att: k(att), d: k(d), r: k(r), x: k(x), sw: k(sw), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
+  const m = { n: k(n), cart: k(cart), c: k(c), ref: k(ref), att: k(att), d: k(d), r: k(r), x: k(x), sw: k(sw), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
   const avant = m.rev - m.achat - m.liv - m.conf - m.ret;
   const pub = Math.round(pubDzd);
   return { ...m, avant, pub, net: avant - pub };
@@ -478,15 +493,23 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   const P = new Map(products.map((p) => [p.id, p]));
 
   // spend per product (all ad sets, to share orders between marketers) and mine. A group's ad sets are the group's own
-  // (its card below): never shared out between its products.
+  // (its card below): never shared out between its products. An ad set's day goes to its products by its ads: each
+  // ad's spend to the product of its page (adlinks.ts › productShares; the owner's choice, 27 Nov 2026).
+  const adDays = await adDaySpend(ctx.db, all.map((s) => s.id), i.from, i.to);
+  const shareMemo = new Map<string, Map<number, number>>();
+  const sharesOf = (r: DayRow, s: AdsetRow) => {
+    const k = `${r.adsetId}|${r.day}`;
+    let m = shareMemo.get(k);
+    if (!m) shareMemo.set(k, (m = productShares(s.productIds, adDays.get(k) ?? [])));
+    return m;
+  };
   const spendBy = (filter: (s: AdsetRow) => boolean) => {
     const out = new Map<number, { usd: number; dzd: number }>();
     const S = new Map(all.map((s) => [s.id, s]));
     for (const r of inPeriod) {
       const s = S.get(r.adsetId);
       if (!s || s.groupId !== null || !filter(s) || !s.productIds.length) continue;
-      const k = 1 / s.productIds.length;
-      for (const pid of s.productIds) {
+      for (const [pid, k] of sharesOf(r, s)) {
         const o = out.get(pid) ?? { usd: 0, dzd: 0 };
         o.usd += (r.spendCents / 100) * k;
         o.dzd += (dzd(r) ?? 0) * k;
@@ -606,20 +629,14 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   const scopeOrders = i.productId ? byProduct.get(i.productId) ?? [] : orders;
   const tot = productRows.filter((p) => !i.productId || p.productId === i.productId);
   const setOf = new Map(all.map((s) => [s.id, s]));
-  const totalUsd = inPeriod
-    .filter((r) => {
-      if (!visible.has(r.adsetId)) return false;
-      if (!i.productId) return true;
-      const s = setOf.get(r.adsetId);
-      return !!s && s.groupId === null && s.productIds.includes(i.productId);
-    })
-    .reduce((s, r) => s + r.spendCents / 100, 0);
+  // one product's page: its share of its ad sets (by their ads), the same as its row in the products table
+  const totalUsd = i.productId ? mySpend.get(i.productId)?.usd ?? 0 : inPeriod.filter((r) => visible.has(r.adsetId)).reduce((s, r) => s + r.spendCents / 100, 0);
   const money: Money = [...tot, ...groupRows].reduce(
     (s, p) => {
       const m = p.money;
-      return { n: s.n + m.n, c: s.c + m.c, ref: s.ref + m.ref, att: s.att + m.att, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), sw: (s.sw ?? 0) + (m.sw ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
+      return { n: s.n + m.n, cart: (s.cart ?? 0) + (m.cart ?? 0), c: s.c + m.c, ref: s.ref + m.ref, att: s.att + m.att, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), sw: (s.sw ?? 0) + (m.sw ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
     },
-    { n: 0, c: 0, ref: 0, att: 0, d: 0, r: 0, x: 0, sw: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
+    { n: 0, cart: 0, c: 0, ref: 0, att: 0, d: 0, r: 0, x: 0, sw: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
   );
   // spend of unlinked ad sets still counts as ads spend for the shop total (a group's ad sets are the group's)
   const unlinked = inPeriod.filter((r) => {
@@ -631,7 +648,12 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   money.net -= unlinkedDzd;
   void scopeOrders;
 
-  // ad sets
+  // ad sets (the pages their ads send people to: Ad sets › Produit, linked by Pilotix, adlinks.ts)
+  const pagesOf = new Map<string, string[]>();
+  for (const r of ids.length ? await ctx.db.query('SELECT DISTINCT adset_id, link_slug FROM ads WHERE adset_id = ANY($1) AND link_slug IS NOT NULL ORDER BY link_slug', [ids]) : []) {
+    const k = String(r.adset_id);
+    (pagesOf.get(k) ?? pagesOf.set(k, []).get(k)!).push(String(r.link_slug));
+  }
   const advByProduct = new Map(productRows.map((p) => [p.productId, p.advice.k]));
   const adsetRows = sets
     // one product's page: its own ad sets (a group's are on the group's card)
@@ -650,6 +672,7 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
       const target = pr && pr.money.n && rate ? pr.money.avant / pr.money.n / rate : null;
       return {
         ...s,
+        linkPages: pagesOf.get(s.id) ?? [],
         spendUsd: t.spend,
         spendDzd: Math.round(mine.reduce((x, r) => x + (dzd(r) ?? 0), 0)),
         purchases: t.pur,
@@ -669,7 +692,13 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   for (let d = i.from; d <= i.to; d = addDays(d, 1)) {
     const rs = inPeriod.filter((r) => r.day === d && shownSets.has(r.adsetId));
     const t = sumDays(rs);
-    const dz = rs.reduce((x, r) => x + (dzd(r) ?? 0), 0);
+    // one product's page: its share of each ad set's spend (by their ads), as in the products table
+    const part = (r: DayRow) => {
+      const s = i.productId ? setOf.get(r.adsetId) : undefined;
+      return s ? sharesOf(r, s).get(i.productId!) ?? 0 : 1;
+    };
+    if (i.productId) t.spend = rs.reduce((x, r) => x + (r.spendCents / 100) * part(r), 0);
+    const dz = rs.reduce((x, r) => x + (dzd(r) ?? 0) * part(r), 0);
     const onDay = (x: any) => confirmedOrder(x) && new Date(new Date(x.created_at).getTime() + 3_600_000).toISOString().slice(0, 10) === d;
     const o = orders.filter((x: any) => (!i.productId || num(x.product_id) === i.productId) && onDay(x));
     // the groups' orders that day (only on the whole page: myGroups is empty for one product)
@@ -802,8 +831,10 @@ export const adsProcs = {
   }),
   /** "Quel produit vend cet ad set ?" — the marketer links his ad set to one or more products. */
   'ads.link': proc(['marketer'], z.object({ adsetId: z.string().min(1).max(40), productIds: z.array(z.number().int().positive()).max(20) }), async (ctx, i) => {
-    const s = (await ctx.db.query('SELECT marketer_id, product_ids, group_id FROM adsets WHERE id = $1', [i.adsetId]))[0];
+    const s = (await ctx.db.query('SELECT marketer_id, product_ids, group_id, link_auto FROM adsets WHERE id = $1', [i.adsetId]))[0];
     if (!s) throw notFound('Ad set introuvable');
+    // its ads' landing pages decide (adlinks.ts; « the link wins », the owner, 27 Nov 2026): change the ad's link in Meta
+    if (s.link_auto) throw bad('Cet ad set suit la landing page de ses pubs : pour changer son produit, changez le lien de la pub dans Meta.');
     // a group's ad set sells the group's products (Lancer une pub › a group): they follow the group, not a person
     if (s.group_id !== null && s.group_id !== undefined) throw bad('Cet ad set vend un groupe : ses produits sont ceux du groupe.');
     if (!isOwner(ctx) && (s.marketer_id === null || num(s.marketer_id) !== ctx.session.profile.id)) {

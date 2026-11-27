@@ -21,7 +21,7 @@ import { seed as seed_cash } from './seeds/cash';
 import { seed as seed_pay } from './seeds/pay';
 import { seed as seed_faults } from './seeds/faults';
 import { seed as seed_admin } from './seeds/admin';
-import { seed as seed_ads } from './seeds/ads';
+import { seed as seed_ads, seedAdLinks } from './seeds/ads';
 import { seed as seed_dellal, seedPhotoChat, seedSizeChart } from './seeds/dellal';
 import { seed as seed_cm } from './seeds/cm';
 import { seed as seed_leads } from './seeds/leads';
@@ -469,6 +469,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   await montageProductId(db);
   // Produits › « Prêt » last: every demo product has its five (it keeps selling), and the full demo shows « À faire »
   await seedReady(db, now, expanded);
+  // Ad sets › Produit, linked by Pilotix from the pages their ads send people to (every product has its page now)
+  await seedAdLinks(db);
   // the bell (top of every page): what the team was told this morning and yesterday (the full demo; the viewer's language)
   if (expanded) await seed_inbox(db, users, now, opts.lang ?? 'fr');
   // the Community manager (the full demo): the orders she typed from her chats and calls, last (nothing above reads them)

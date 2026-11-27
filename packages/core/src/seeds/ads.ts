@@ -1,5 +1,7 @@
 import type { Db } from '../db';
 import { num } from '../db';
+import { linkAdsets, type ReadAd } from '../modules/adlinks';
+import { landingStore } from '../modules/landingquery';
 
 /**
  * Demo data for Publicité: the main seed creates two ad sets with 30 days of results; here we add three more ad sets
@@ -143,4 +145,29 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   ];
   for (const [id, kind, code, summary, min] of issues)
     if (id) await db.query(`INSERT INTO ad_issues (object_id, account_id, level, kind, code, summary, at) VALUES ($1,'120211887','AD',$2,$3,$4,$5) ON CONFLICT (object_id) DO NOTHING`, [id, kind, code, summary, new Date(now - min * 60_000).toISOString()]);
+}
+
+/**
+ * Ad sets › Produit, linked by Pilotix (modules/adlinks.ts): the demo's ads get where they send people, as Meta gives
+ * it — the stroller's and the travel cot's to their pages, the play mat's test to Messenger (no page: its ad set stays
+ * « not linked yet », for a person to choose) — and the same link run as on the server gives their ad sets their
+ * products. After every demo product has its page (seedReady).
+ */
+export async function seedAdLinks(db: Db): Promise<void> {
+  const store = await landingStore(db);
+  const pageOf = async (sku: string) =>
+    (await db.query(`SELECT l.slug FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE p.sku = $1 AND l.active ORDER BY l.id LIMIT 1`, [sku]))[0]?.slug as string | undefined;
+  const want: [string, string | null][] = [
+    ['120200001', 'PX-POU'],
+    ['120200003', 'PX-LIT'],
+    ['120200005', null],
+  ];
+  const read: ReadAd[] = [];
+  for (const [adset, sku] of want) {
+    const slug = sku ? await pageOf(sku) : null;
+    if (sku && !slug) continue;
+    for (const a of await db.query('SELECT id, name FROM ads WHERE adset_id = $1 ORDER BY id', [adset]))
+      read.push({ id: String(a.id), adsetId: adset, name: String(a.name), link: slug ? `https://go.pilotix.online/${store}/${slug}?utm_source=facebook` : 'https://m.me/babyjoydz' });
+  }
+  await linkAdsets(db, read, { own: null, hosts: ['go.pilotix.online', 'pilotix.online'], store });
 }
