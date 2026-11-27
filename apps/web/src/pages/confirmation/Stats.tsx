@@ -397,24 +397,24 @@ function EcBody({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
       </div>
       <div className="px-sx-grp">
         <Group title={t('confirmation.nv.gVolume')} size={1}>
-          <Tile label={t('confirmation.ec.calls')} help={t('confirmation.ec.hCalls')} value={n(T.calls)} gl={t('confirmation.ec.callsSub')} d={<Arrow v={T.calls - P.calls} unit="n" />} />
+          <Tile label={t('confirmation.ecs.calls')} help={t('confirmation.ecs.hCalls')} value={n(T.calls)} gl={t('confirmation.ecs.callsSub')} d={<Arrow v={T.calls - P.calls} unit="n" />} />
         </Group>
         <Group title={t('confirmation.nv.gSpeed')} size={1}>
-          <Tile label={t('confirmation.ec.onTime')} help={t('confirmation.ec.hOnTime')} value={pctTxt(ot)} gl={t('confirmation.nv.goal', { v: 90 })} d={<Arrow v={dOf(ot, pOf(P.onTime, P.calls))} unit="pts" />} />
+          <Tile label={t('confirmation.ecs.onTime')} help={t('confirmation.ecs.hOnTime')} value={pctTxt(ot)} gl={t('confirmation.nv.goal', { v: 90 })} d={<Arrow v={dOf(ot, pOf(P.onTime, P.calls))} unit="pts" />} />
         </Group>
         <Group title={t('confirmation.nv.gResult')} size={2}>
-          <Tile main label={t('confirmation.ec.reached')} help={t('confirmation.ec.hReached')} value={pctTxt(re)} gl={t('confirmation.ec.reachedSub')} d={<Arrow v={dOf(re, pOf(ecReached(P), ecReached(P) + P.never))} unit="pts" />} />
-          <Tile label={t('confirmation.ec.tries')} help={t('confirmation.ec.hTries')} value={tr === null ? '—' : dec1(tr)} gl={t('confirmation.ec.triesSub')} d={<Arrow v={tr === null || trP === null ? null : tr - trP} unit="dec" goodDown />} />
+          <Tile main label={t('confirmation.ecs.reached')} help={t('confirmation.ecs.hReached')} value={pctTxt(re)} gl={t('confirmation.ecs.reachedSub')} d={<Arrow v={dOf(re, pOf(ecReached(P), ecReached(P) + P.never))} unit="pts" />} />
+          <Tile label={t('confirmation.ecs.tries')} help={t('confirmation.ecs.hTries')} value={tr === null ? '—' : dec1(tr)} gl={t('confirmation.ecs.triesSub')} d={<Arrow v={tr === null || trP === null ? null : tr - trP} unit="dec" goodDown />} />
         </Group>
       </div>
-      <div className="px-sx-sec">{t(dir ? 'confirmation.ec.endedAll' : 'confirmation.ec.ended', { count: closed })}</div>
+      <div className="px-sx-sec">{t(dir ? 'confirmation.ecs.endedAll' : 'confirmation.ecs.ended', { count: closed })}</div>
       <EcBar s={T} />
       <div className="px-sx-sec">{t(dir ? 'confirmation.nv.nowAll' : 'confirmation.nv.now')}</div>
       <div className={dir ? 'px-sx-t4' : 'px-sx-t3'}>
-        <Tile label={t('confirmation.ec.inProgress')} help={t('confirmation.ec.hInProgress')} value={n(D.live.inProgress)} gl={t('confirmation.ec.worth', { v: da(D.live.value) })} />
-        {dir && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.ec.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} />}
-        <Tile warn={D.live.late > 0} label={t('confirmation.ec.late')} help={t('confirmation.ec.hLate')} value={n(D.live.late)} />
-        <Tile label={t('confirmation.ec.dueHour')} help={t('confirmation.ec.hDueHour')} value={n(D.live.dueHour)} />
+        <Tile label={t('confirmation.ecs.inProgress')} help={t('confirmation.ecs.hInProgress')} value={n(D.live.inProgress)} gl={t('confirmation.ecs.worth', { v: da(D.live.value) })} />
+        {dir && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.ecs.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} />}
+        <Tile warn={D.live.late > 0} label={t('confirmation.ecs.late')} help={t('confirmation.ecs.hLate')} value={n(D.live.late)} />
+        <Tile label={t('confirmation.ecs.dueHour')} help={t('confirmation.ecs.hDueHour')} value={n(D.live.dueHour)} />
       </div>
       {dir ? <EcTeams D={D} onTeam={onTeam} /> : <EcAgents D={D} />}
     </div>
@@ -425,7 +425,7 @@ function EcBody({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
 function EcBar({ s }: { s: EcS }) {
   const { t } = useTranslation();
   const all = ecReached(s) + s.never;
-  if (!all) return <p className="px-sx-empty">{t('confirmation.ec.noClosed')}</p>;
+  if (!all) return <p className="px-sx-empty">{t('confirmation.ecs.noClosed')}</p>;
   const w = (x: number) => `${(x * 100) / all}%`;
   const parts = [
     ['confirmed', s.confirmed, 'c'],
@@ -435,8 +435,8 @@ function EcBar({ s }: { s: EcS }) {
   return (
     <div className="px-sx-bar">
       <div className="px-sx-brk">
-        <div style={{ width: w(ecReached(s)) }}>{t('confirmation.ec.barReached', { p: pctTxt(pOf(ecReached(s), all)) })}</div>
-        {s.never > 0 && <div style={{ width: w(s.never) }}>{t('confirmation.ec.barNot', { p: pctTxt(pOf(s.never, all)) })}</div>}
+        <div style={{ width: w(ecReached(s)) }}>{t('confirmation.ecs.barReached', { p: pctTxt(pOf(ecReached(s), all)) })}</div>
+        {s.never > 0 && <div style={{ width: w(s.never) }}>{t('confirmation.ecs.barNot', { p: pctTxt(pOf(s.never, all)) })}</div>}
       </div>
       <div className="px-sx-track">
         {parts.map(([k, v, c]) => (v > 0 ? <div key={k} className={c} style={{ width: w(v) }} /> : null))}
@@ -445,7 +445,7 @@ function EcBar({ s }: { s: EcS }) {
         {parts.map(([k, v, c]) => (
           <span key={k}>
             <i className={c} />
-            {t(`confirmation.ec.${k}`)} <span className="ltr">{pctTxt(pOf(v, all))}</span>
+            {t(`confirmation.ecs.${k}`)} <span className="ltr">{pctTxt(pOf(v, all))}</span>
           </span>
         ))}
       </div>
@@ -457,7 +457,7 @@ function EcBar({ s }: { s: EcS }) {
 function EcAgents({ D }: { D: Ec }) {
   const { t } = useTranslation();
   const cols = ['cCalls', 'cOnTime', 'cLate', 'cReached', 'cTries'] as const;
-  const head = (k: (typeof cols)[number]) => t(`confirmation.ec.${k}`);
+  const head = (k: (typeof cols)[number]) => t(`confirmation.ecs.${k}`);
   const cells = (a: EcS & { late: number }, judge: boolean, lateRed: boolean) => {
     const ot = pOf(a.onTime, a.calls);
     const re = pOf(ecReached(a), ecReached(a) + a.never);
@@ -497,7 +497,7 @@ function EcAgents({ D }: { D: Ec }) {
               })
             ) : (
               <tr>
-                <td colSpan={cols.length + 1} className="empty">{t('confirmation.ec.empty')}</td>
+                <td colSpan={cols.length + 1} className="empty">{t('confirmation.ecs.empty')}</td>
               </tr>
             )}
             {D.agents.length > 1 && (
@@ -520,7 +520,7 @@ function EcTeams({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
   const rows = D.teams ?? [];
   const avg = D.perAgent && D.perAgent.agents > 0 ? D.perAgent.orders / D.perAgent.agents : null;
   const cols = ['cAgents', 'cInProgress', 'cPerAgent', 'cOnTime', 'cLate', 'cReached', 'cTriesShort'] as const;
-  const head = (k: (typeof cols)[number]) => t(k === 'cAgents' || k === 'cPerAgent' ? `confirmation.nv.${k}` : `confirmation.ec.${k}`);
+  const head = (k: (typeof cols)[number]) => t(k === 'cAgents' || k === 'cPerAgent' ? `confirmation.nv.${k}` : `confirmation.ecs.${k}`);
   type Row = NonNullable<Ec['allTeams']>;
   const cells = (r: Row, judge: boolean, per: number | null) => {
     const ot = pOf(r.onTime, r.calls);
@@ -1270,93 +1270,266 @@ function OvWords() {
 }
 
 /** Confirmation › Statistiques (managers): the page the « Statistiques » switch of Confirmées opens. */
+// ---------------------------------------------------------------- Confirmées › Statistiques (the owner's sketch)
+/**
+ * Confirmées › Statistiques, as the owner's sketch (27 Nov 2026, « Agent manager view — Confirmées » PDF): are the leads
+ * good, does the team confirm them, and do the confirmed orders end up delivered? The filters (the dates — by creation
+ * or by the day the confirmation status changed —, an agent, a product; for the store's owner a team or an agency), six
+ * cards (the main one in navy: taux conf.), why real clients said no, then one table with the same filters: per agent
+ * (per team for the owner) or per product. Every number is a « taux »: pending orders counted.
+ */
+interface CfF {
+  per: Kf['per'];
+  basis: Kf['basis'];
+  from: string;
+  to: string;
+  agent: number | null;
+  product: number | null;
+  team: string | null;
+  by: 'people' | 'product';
+}
+// the dates, the date type and the table's choice are kept on this device; the agent, product and team filters are not
+const loadCf = (): CfF => {
+  const k = loadKf();
+  const kept = store.json<Partial<CfF>>('conf-cf', {});
+  return { per: kept.per ?? '30', basis: kept.basis ?? 'updated', from: kept.from ?? k.from, to: kept.to ?? k.to, by: kept.by ?? 'people', agent: null, product: null, team: null };
+};
+const saveCf = (f: CfF) => store.set('conf-cf', JSON.stringify({ per: f.per, basis: f.basis, from: f.from, to: f.to, by: f.by }));
+const useCf = (f: CfF) =>
+  useRpc(
+    'confirmation.confirmees',
+    { per: f.per, basis: f.basis, ...(f.per === 'custom' ? { from: f.from, to: f.to } : {}), ...(f.agent ? { agent: f.agent } : {}), ...(f.product ? { product: f.product } : {}), ...(f.team ? { team: f.team } : {}), by: f.by },
+    { refetchInterval: 60_000 },
+  );
+type Cf = NonNullable<ReturnType<typeof useCf>['data']>;
+type CfS = Cf['sum'];
+const cfQual = (s: CfS) => pOf(s.qualified, s.leads);
+const cfConf = (s: CfS) => pOf(s.confirmed, s.qualified);
+const cfUp = (s: CfS) => pOf(s.upsell, s.confirmed);
+const cfLivr = (s: CfS) => pOf(s.delivered, s.shipped);
+const cfFinal = (s: CfS) => pOf(s.delivered, s.qualified);
+
 export function ConfirmedStatsPage() {
   const { t } = useTranslation();
-  const [kf0, setKfState] = useState<Kf>(loadKf);
-  const kf: Kf = { ...kf0, view: 'conf' };
-  const setKf = (k: Kf) => {
-    setKfState(k);
-    saveKf(k);
-  };
-  const q = useOverview(kf);
-  const O = q.data;
-  // the same numbers as « Après la confirmation » (Livrées sur confirmées), asked once for both
-  const dq = useRpc('confirmation.delivery', { ...kfInput(kf), on: 'confirmed' }, { refetchInterval: 60_000 });
-  const D = dq.data;
-  const lqV = O ? verdictOf(O.leadsQuality, O.limits) : 'none';
+  const [f, setF0] = useState<CfF>(loadCf);
+  const setF = (p: Partial<CfF>) =>
+    setF0((x) => {
+      const nx = { ...x, ...p };
+      saveCf(nx);
+      return nx;
+    });
+  const q = useCf(f);
+  const D = q.data;
   return (
-    <div className="px-cs px-ov">
-      <div className="card bjkfc px-cs-top">
-        <Head title={t('confirmation.ov.title')} help={t('confirmation.ov.help')}>
-          <KfBar kf={kf} setKf={setKf} noView />
-          {O && O.pending.n > 0 && (
-            <a className="btn primary px-ov-call" href={callHref(O)}>
-              <Icon name="phone" /> {t('confirmation.ov.call', { count: O.pending.n })}
-            </a>
-          )}
-        </Head>
-        {q.error ? (
-          <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-        ) : !O ? (
-          <Loading />
-        ) : (
-          <>
-            <p className="px-ov-find">
-              {O.received === 0
-                ? t('confirmation.ov.findEmpty')
-                : O.leadsQuality === null
-                  ? t('confirmation.ov.findNoReal')
-                  : t('confirmation.ov.findLq', { p: pp(O.leadsQuality) })}{' '}
-              {O.attacks.n > 0 && t('confirmation.ov.findAttacks', { a: n(O.attacks.n), f: n(O.finished - O.duplicates.n) })}
-            </p>
-            <div className="kpis px-ov-kpis">
-              <Kpi label={t('confirmation.ov.received')} value={n(O.received)} sub={t('confirmation.ov.receivedSub', { f: n(O.finished), p: n(O.pending.n) })} />
-              <Kpi label={t('confirmation.ov.confirmed')} value={n(O.confirmed.n)} sub={t('confirmation.ov.confirmedSub', { v: da(O.confirmed.value), b: da(O.confirmed.basket) })} />
-              <Kpi label={t('confirmation.ov.confRate')} help={t('confirmation.ov.confRateHelp')} value={pp(O.oldRate)} sub={t('confirmation.ov.confRateSub', { c: n(O.confirmed.n), f: n(O.finished) })} />
-              <Kpi
-                tone={V_TONE[lqV]}
-                label={t('confirmation.ov.lq')}
-                help={t('confirmation.ov.lqHelp')}
-                value={pp(O.leadsQuality)}
-                trend={<VerdictPill v={lqV} />}
-                sub={t('confirmation.ov.lqSub', { c: n(O.confirmed.n), r: n(O.real) })}
-              />
-              <Kpi
-                label={t('confirmation.ov.finalRate')}
-                help={t('confirmation.ov.finalRateHelp')}
-                value={D ? pctTxt(D.overall) : '…'}
-                sub={D ? t('confirmation.ov.finalRateSub', { d: n(D.delivered), c: n(D.confirmed) }) : ' '}
-              />
-              <Kpi label={t('confirmation.ov.upRate')} help={t('confirmation.ov.upHelp')} value={pp(O.upsell.rate)} sub={t('confirmation.ov.upRateSub')} />
-              <Kpi label={t('confirmation.ov.upOrders')} value={n(O.upsell.orders)} sub={t('confirmation.ov.upOrdersSub', { c: n(O.confirmed.n), v: da(O.upsell.value) })} />
-              <Kpi
-                label={t('confirmation.ov.first')}
-                value={<Dur m={O.speed.dayMedianMin} />}
-                sub={O.speed.nightMedianMin === null ? t('confirmation.ov.firstSubDay') : t('confirmation.ov.firstSub', { n: mn(O.speed.nightMedianMin) })}
-              />
-            </div>
-          </>
-        )}
+    <section className="card px-st px-cf">
+      <div className="px-sx">
+        <CfFilters f={f} setF={setF} D={D} />
+        {q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !D ? <Loading /> : <CfBody D={D} f={f} setF={setF} />}
       </div>
-      {O && (
-        <>
-          <div className="px-ov-row">
-            <OvFunnel O={O} kf={kf} />
-            <OvLosses O={O} />
-          </div>
-          <div className="px-ov-row">
-            <OvHours O={O} />
-            <OvSpeed O={O} />
-          </div>
-          <OvAgents O={O} />
-          <OvProducts O={O} />
-          <div className="card bjkfc">
-            <Head title={t('confirmation.cs.after')} help={t('confirmation.cs.afterHelp')} />
-            <DelivBody kf={kf} on="confirmed" bare />
-          </div>
-          <OvWords />
-        </>
+    </section>
+  );
+}
+
+/** The filter pills: dates (a period or custom days), date de création / changement de statut, team, agent, product. */
+function CfFilters({ f, setF, D }: { f: CfF; setF: (p: Partial<CfF>) => void; D: Cf | undefined }) {
+  const { t } = useTranslation();
+  const kf: Kf = { per: f.per, basis: f.basis, from: f.from, to: f.to, view: 'conf' };
+  return (
+    <div className="px-sx-fb">
+      <DateRange kf={kf} onChange={(p) => setF({ per: p.per, from: p.from, to: p.to })} />
+      <div className="px-sx-seg" role="radiogroup" aria-label={t('confirmation.stats.basis')}>
+        {(['created', 'updated'] as const).map((b) => (
+          <button key={b} type="button" role="radio" aria-checked={f.basis === b} className={f.basis === b ? 'on' : ''} onClick={() => setF({ basis: b })}>
+            {t(b === 'created' ? 'confirmation.cfs.created' : 'confirmation.cfs.updated')}
+          </button>
+        ))}
+      </div>
+      {D?.teams && (
+        <select aria-label={t('confirmation.cfs.team')} className="px-sx-pill" value={f.team ?? ''} onChange={(e) => setF({ team: e.target.value || null, agent: null })}>
+          <option value="">{t('confirmation.cfs.teamAll')}</option>
+          {D.teams.map((x) => (
+            <option key={x.key} value={x.key}>
+              {x.kind === 'agency' ? `${x.name} · ${t('confirmation.nv.agency')}` : x.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {D && (D.agents.length > 0 || f.agent) && (
+        <select aria-label={t('confirmation.cfs.agent')} className="px-sx-pill ag" value={f.agent ?? ''} onChange={(e) => setF({ agent: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">{t('confirmation.cfs.agentAll')}</option>
+          {D.agents.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {D && (
+        <select aria-label={t('confirmation.cfs.product')} className="px-sx-pill" value={f.product ?? ''} onChange={(e) => setF({ product: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">{t('confirmation.cfs.productAll')}</option>
+          {D.products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
       )}
     </div>
   );
 }
+
+function CfBody({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => void }) {
+  const { t } = useTranslation();
+  const S = D.sum;
+  const per = D.perAgent && D.perAgent.agents > 0 ? Math.round(D.perAgent.leads / D.perAgent.agents) : null;
+  return (
+    <>
+      <div className={`px-sx-t6${D.perAgent ? ' t7' : ''}`}>
+        <Tile label={t('confirmation.cfs.leads')} help={t('confirmation.cfs.hLeads')} value={n(S.leads)} gl={t('confirmation.cfs.leadsSub')} />
+        {D.perAgent && <Tile label={t('confirmation.cfs.perAgent')} help={t('confirmation.cfs.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent.agents })} />}
+        <Tile label={t('confirmation.cfs.qualified')} help={t('confirmation.cfs.hQualified')} value={n(S.qualified)} gl={t('confirmation.cfs.qualifiedSub')} />
+        <Tile label={t('confirmation.cfs.confirmed')} help={t('confirmation.cfs.hConfirmed')} value={n(S.confirmed)} gl={t('confirmation.cfs.confirmedSub')} />
+        <Tile label={t('confirmation.cfs.quality')} help={t('confirmation.cfs.hQuality')} value={pctTxt(cfQual(S))} gl={t('confirmation.cfs.qualitySub')} />
+        <Tile main label={t('confirmation.cfs.taux')} help={t('confirmation.cfs.hTaux')} value={pctTxt(cfConf(S))} gl={t('confirmation.cfs.tauxSub')} />
+        <Tile label={t('confirmation.cfs.upsell')} help={t('confirmation.cfs.hUpsell')} value={pctTxt(cfUp(S))} gl={t('confirmation.cfs.upsellSub')} />
+      </div>
+      <div className="px-sx-sec">
+        {t('confirmation.cfs.why')}
+        <Help text={t('confirmation.cfs.hWhy')} label={t('confirmation.cfs.why')} />
+      </div>
+      <CfReasons D={D} />
+      <CfTable D={D} f={f} setF={setF} />
+    </>
+  );
+}
+
+/** Why real clients said no: the reasons the agents wrote (fakes, competitors, wrong numbers, no answers left out). */
+function CfReasons({ D }: { D: Cf }) {
+  const { t } = useTranslation();
+  const all = D.reasons.reduce((s, r) => s + r.n, 0);
+  if (!all) return <p className="px-sx-empty">{t('confirmation.cfs.noReason')}</p>;
+  return (
+    <div className="px-sx-rs">
+      {D.reasons.map((r) => {
+        const p = pOf(r.n, all) ?? 0;
+        return (
+          <div key={r.code} className="px-sx-rs-row">
+            <span>{t(`confirmation.cfs.r.${r.code}`)}</span>
+            <div className="bk">
+              <div style={{ width: `${p}%` }} />
+            </div>
+            <span className="pc ltr">{p} %</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One table, the same filters: per agent (per team for the owner) or per product; delivery only here. */
+function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => void }) {
+  const { t } = useTranslation();
+  const S = D.sum;
+  const prodOnly = !!f.agent || D.team?.key.startsWith('a');
+  const people = D.by === 'people';
+  const dir = D.director && people;
+  const cols = [...(dir ? (['cAgents'] as const) : []), 'cLeads', ...(dir ? (['cPerAgent'] as const) : []), 'cQualified', 'cConfirmed', 'cQuality', 'cTaux', 'cUpsell', 'cLivr', 'cFinal'] as const;
+  const head = (k: (typeof cols)[number]) => t(`confirmation.cfs.${k}`);
+  const first = people ? t(D.director ? 'confirmation.nv.cTeam' : 'confirmation.nv.cAgent') : t('confirmation.cfs.cProduct');
+  // red: under the team (the total line): lead quality 5 pts, upsell half, taux livr. 10 pts — a line with few leads is not judged
+  const tq = cfQual(S);
+  const tu = cfUp(S);
+  const tl = cfLivr(S);
+  const cells = (r: CfS & { agents?: number | null }, judge: boolean) => {
+    const q = cfQual(r);
+    const u = cfUp(r);
+    const l = cfLivr(r);
+    const bad = (b: boolean) => (judge && b ? ' bad' : '');
+    return [
+      ...(dir
+        ? [
+            <td key="a" className="num" data-l={head('cAgents')}>
+              {r.agents === null || r.agents === undefined ? <span className="muted">{r.agents === null ? t('confirmation.nv.private') : '—'}</span> : <span className="ltr">{n(r.agents)}</span>}
+            </td>,
+          ]
+        : []),
+      <td key="n" className="num ltr" data-l={head('cLeads')}>{n(r.leads)}</td>,
+      ...(dir ? [<td key="p" className="num ltr" data-l={head('cPerAgent')}>{r.agents ? n(Math.round(r.leads / r.agents)) : '—'}</td>] : []),
+      <td key="q" className="num ltr" data-l={head('cQualified')}>{n(r.qualified)}</td>,
+      <td key="c" className="num ltr" data-l={head('cConfirmed')}>{n(r.confirmed)}</td>,
+      <td key="lq" className={`num ltr${bad(q !== null && tq !== null && q <= tq - 5)}`} data-l={head('cQuality')}>{pctTxt(q)}</td>,
+      <td key="t" className="num ltr" data-l={head('cTaux')}>{pctTxt(cfConf(r))}</td>,
+      <td key="u" className={`num ltr${bad(u !== null && tu !== null && tu > 0 && u < tu / 2)}`} data-l={head('cUpsell')}>{pctTxt(u)}</td>,
+      <td key="l" className={`num ltr${bad(l !== null && tl !== null && l <= tl - 10)}`} data-l={head('cLivr')}>{pctTxt(l)}</td>,
+      <td key="f" className="num ltr" data-l={head('cFinal')}>{pctTxt(cfFinal(r))}</td>,
+    ];
+  };
+  const name = (r: Cf['table'][number]) => (r.kind === 'none' ? t(D.director && people ? 'confirmation.cfs.noTeam' : 'confirmation.cfs.noAgent') : r.name);
+  const total = D.team ? D.team.name : t(D.director ? 'confirmation.nv.allTeams' : 'confirmation.nv.teamRow');
+  return (
+    <>
+      <div className="px-sx-sec row">
+        <span>{t('confirmation.cfs.tableSec')}</span>
+        {!prodOnly && (
+          <span className="px-sx-seg" role="radiogroup" aria-label={t('confirmation.cfs.tableSec')}>
+            {(['people', 'product'] as const).map((b) => (
+              <button key={b} type="button" role="radio" aria-checked={D.by === b} className={D.by === b ? 'on' : ''} onClick={() => setF({ by: b })}>
+                {t(b === 'product' ? 'confirmation.cfs.byProduct' : D.director ? 'confirmation.cfs.byTeam' : 'confirmation.cfs.byAgent')}
+              </button>
+            ))}
+          </span>
+        )}
+      </div>
+      <div className="tbl-wrap">
+        <table className="tbl px-ov-tbl px-sx-tbl">
+          <thead>
+            <tr>
+              <th>{first}</th>
+              {cols.map((k) => (
+                <th key={k} className="num">
+                  {head(k)}
+                  {(k === 'cLivr' || k === 'cFinal') && <Help text={t(k === 'cLivr' ? 'confirmation.cfs.hLivr' : 'confirmation.cfs.hFinal')} label={head(k)} />}
+                </th>
+              ))}
+              {dir && <th aria-hidden="true" />}
+            </tr>
+          </thead>
+          <tbody>
+            {D.table.length ? (
+              D.table.map((r) => {
+                const few = r.leads < 20;
+                const go = dir && r.kind === 'team';
+                return (
+                  <tr
+                    key={r.key}
+                    className={[few ? 'few' : '', go ? 'go' : ''].filter(Boolean).join(' ') || undefined}
+                    title={few ? t('confirmation.cfs.few') : undefined}
+                    onClick={go ? () => setF({ team: r.key, agent: null }) : undefined}
+                  >
+                    <td data-l={first}>
+                      {name(r)} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
+                    </td>
+                    {cells(r, !few && r.kind !== 'none')}
+                    {dir && <td className="go" aria-hidden="true">{go ? '›' : ''}</td>}
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={cols.length + 1} className="empty">{t('confirmation.cfs.empty')}</td>
+              </tr>
+            )}
+            {D.table.length > 1 && (
+              <tr className="tot">
+                <td data-l={first}>{total}</td>
+                {cells({ ...S, agents: D.perAgent?.agents }, false)}
+                {dir && <td aria-hidden="true" />}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+

@@ -1030,6 +1030,156 @@ async function deliveryPerf(ctx: Ctx, i: KfInput & { on: 'created' | 'confirmed'
   };
 }
 
+// ---------------------------------------------------------------- Confirmées › Statistiques (27 Nov 2026)
+/** What became of a confirmed order out of the depot: left (on the road, delivered, back) and delivered. */
+const SHIPPED = [...ROUTE, ...OK, ...BACK];
+export interface CfSum {
+  /** every order of the period (an abandoned cart only once confirmed) */
+  leads: number;
+  /** not a fake, a competitor, a duplicate, a wrong number or a « never answered » (a pending order stays qualified) */
+  qualified: number;
+  confirmed: number;
+  /** confirmed with an upsell */
+  upsell: number;
+  /** confirmed and gone out of the depot (on the road counted), and delivered */
+  shipped: number;
+  delivered: number;
+}
+export interface CfRow extends CfSum {
+  key: string;
+  name: string;
+  kind?: 'team' | 'agency' | 'none';
+  /** agents with leads (a team; null: an agency — its agents stay private) */
+  agents?: number | null;
+}
+/** Why real clients said no, as the sketch groups the agents' reasons. */
+const CF_REASON: Record<string, string> = { price: 'price', fee: 'price', changed_mind: 'mind', too_long: 'slow', elsewhere: 'elsewhere' };
+export const CfInput = KfInput.extend({
+  /** one agent: the cards are his, the table per product */
+  agent: id.optional(),
+  /** one product: every number keeps only the orders with it */
+  product: id.optional(),
+  /** the store's owner: one of his teams (t<id>: its manager view) or a confirmation agency (a<id>) */
+  team: z.string().max(40).optional(),
+  /** the table: per agent (per team for the owner) or per product */
+  by: z.enum(['people', 'product']).default('people'),
+});
+
+/**
+ * Confirmées › Statistiques, as the owner's sketch (27 Nov 2026, « Agent manager view — Confirmées »): are the leads good,
+ * does the team confirm them, and do the confirmed orders end up delivered? Filters: the dates (by creation, or by the
+ * day the CONFIRMATION status changed), an agent, a product — and, for the store's owner, a team or an agency. Every
+ * number is a « taux » (pending orders counted). Cards: leads, qualified leads, confirmed, lead quality (qualified ÷
+ * leads), taux conf. (confirmed ÷ qualified), upsell; why real clients said no (bad leads left out); a table per agent
+ * (per team for the owner) or per product, with the delivery only there: taux livr. (delivered ÷ shipped) and taux
+ * final (delivered ÷ qualified).
+ */
+async function confirmeesStats(ctx: Ctx, i: z.infer<typeof CfInput>) {
+  const R = kfRange(ctx.now(), i);
+  const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
+  const T = director ? await getSetting(ctx.db, 'teams') : [];
+  const A = director ? await agencyNames(ctx) : [];
+  const agency = director && i.team?.startsWith('a') ? A.find((a) => `a${a.id}` === i.team) ?? null : null;
+  const { opened, membersOf, inView } = teamView(T, director && !agency ? i.team : undefined);
+  const rows = await ctx.db.query(
+    `SELECT id, conf_status, follow_status, agent_id, conf_agency_id, has_upsell, came FROM sales WHERE ${periodSql(i.basis, 'sales')}${statsSql(ctx, 'sales')}`,
+    [isoT(R.a), isoT(R.b)],
+  );
+  let O = rows
+    .filter((o: any) => !cartLeftOut(o.came, o.conf_status))
+    .map((o: any) => ({ id: num(o.id), status: String(o.conf_status), follow: (o.follow_status ?? null) as string | null, agentId: numOrNull(o.agent_id), agencyId: numOrNull(o.conf_agency_id), up: !!o.has_upsell }))
+    .filter((o) => (agency ? o.agencyId === agency.id : inView(o.agentId, o.agencyId)));
+  // each order's products, and the note of its last confirmation change (the reason of a cancel, a fake, no answer)
+  const prods = new Map<number, { id: number; name: string }[]>();
+  const note = new Map<number, string | null>();
+  const ids = O.map((o) => o.id);
+  for (let k = 0; k < ids.length; k += 1000) {
+    const part = ids.slice(k, k + 1000);
+    for (const e of await ctx.db.query(`SELECT DISTINCT ON (order_id) order_id, note FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) ORDER BY order_id, at DESC, id DESC`, [part]))
+      note.set(num(e.order_id), e.note ?? null);
+    for (const r of await ctx.db.query(`SELECT DISTINCT i.order_id, p.id, p.name FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = ANY($1) ORDER BY i.order_id, p.id`, [part])) {
+      const o = num(r.order_id);
+      if (!prods.has(o)) prods.set(o, []);
+      prods.get(o)!.push({ id: num(r.id), name: String(r.name) });
+    }
+  }
+  const who = await names(ctx.db);
+  // the filters' choices (before the agent and product filters themselves)
+  const agentChoices = [...new Set(O.filter((o) => o.agencyId === null && o.agentId !== null).map((o) => o.agentId!))]
+    .map((aid) => ({ id: aid, name: who.get(aid) ?? '—' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const prodChoices = [...new Map(O.flatMap((o) => prods.get(o.id) ?? []).map((p) => [p.id, p])).values()].sort((a, b) => a.name.localeCompare(b.name));
+  if (i.agent) O = O.filter((o) => o.agentId === i.agent);
+  if (i.product) O = O.filter((o) => (prods.get(o.id) ?? []).some((p) => p.id === i.product));
+  const L = O.map((o) => ({ ...o, lead: leadOf(o.status, note.get(o.id)) }));
+  type Ld = (typeof L)[number];
+  const sumOf = (xs: Ld[]): CfSum => {
+    const conf = xs.filter((o) => o.lead === 'confirmed');
+    return {
+      leads: xs.length,
+      qualified: xs.filter((o) => o.lead === 'confirmed' || o.lead === 'refused' || o.lead === 'pending').length,
+      confirmed: conf.length,
+      upsell: conf.filter((o) => o.up).length,
+      shipped: conf.filter((o) => o.follow !== null && SHIPPED.includes(o.follow)).length,
+      delivered: conf.filter((o) => o.follow !== null && OK.includes(o.follow)).length,
+    };
+  };
+  // why real clients said no (fakes, competitors, wrong numbers, no answers and duplicates are not clients' answers)
+  const RS = new Map<string, number>();
+  for (const o of L.filter((x) => x.lead === 'refused')) {
+    const k = CF_REASON[cancelReason(note.get(o.id))] ?? 'other';
+    RS.set(k, (RS.get(k) ?? 0) + 1);
+  }
+  // the table
+  const dir = director && !opened && !agency;
+  let table: CfRow[];
+  const productRows = () =>
+    [...new Map(L.flatMap((o) => (prods.get(o.id) ?? []).map((p) => [p.id, p] as const))).values()]
+      .filter((p) => !i.product || p.id === i.product)
+      .map((p) => ({ key: `p${p.id}`, name: p.name, ...sumOf(L.filter((o) => (prods.get(o.id) ?? []).some((x) => x.id === p.id))) }));
+  if (i.by === 'product' || i.agent || agency) table = productRows();
+  else if (dir) {
+    const own = L.filter((o) => o.agencyId === null);
+    const inTeams = new Set<number>();
+    table = [
+      ...T.map((t): CfRow => {
+        const m = membersOf(t);
+        for (const x of m) inTeams.add(x);
+        const xs = own.filter((o) => o.agentId !== null && m.has(o.agentId));
+        return { key: `t${t.id}`, name: t.name, kind: 'team', agents: new Set(xs.map((o) => o.agentId)).size, ...sumOf(xs) };
+      }),
+      ...A.map((a): CfRow => ({ key: `a${a.id}`, name: a.name, kind: 'agency', agents: null, ...sumOf(L.filter((o) => o.agencyId === a.id)) })),
+    ].filter((r) => r.kind === 'team' || r.leads);
+    // the leads no team has (no agent yet, or an agent in no team): one line, so the lines add up to the cards
+    const rest = own.filter((o) => o.agentId === null || !inTeams.has(o.agentId));
+    if (rest.length) table.push({ key: 'none', name: '', kind: 'none', agents: null, ...sumOf(rest) });
+  } else {
+    const per = new Map<string, Ld[]>();
+    for (const o of L) {
+      const k = o.agentId === null ? 'none' : `u${o.agentId}`;
+      if (!per.has(k)) per.set(k, []);
+      per.get(k)!.push(o);
+    }
+    table = [...per.entries()].map(([k, xs]) => ({ key: k, name: k === 'none' ? '' : who.get(Number(k.slice(1))) ?? '—', ...(k === 'none' ? { kind: 'none' as const } : {}), ...sumOf(xs) }));
+  }
+  table.sort((a, b) => (a.kind === 'none' ? 1 : 0) - (b.kind === 'none' ? 1 : 0) || b.leads - a.leads || a.name.localeCompare(b.name));
+  // Leads/agent (the owner): his own agents with leads in the period
+  const ownAgents = new Set(L.filter((o) => o.agencyId === null && o.agentId !== null).map((o) => o.agentId)).size;
+  return {
+    director: dir,
+    /** the owner's choices: his teams and the agencies (null: not the owner) */
+    teams: director ? [...T.map((t) => ({ key: `t${t.id}`, name: t.name, kind: 'team' as const })), ...A.map((a) => ({ key: `a${a.id}`, name: a.name, kind: 'agency' as const }))] : null,
+    team: opened ? { key: `t${opened.id}`, name: opened.name } : agency ? { key: `a${agency.id}`, name: agency.name } : null,
+    agents: agency ? [] : agentChoices,
+    products: prodChoices,
+    sum: sumOf(L),
+    perAgent: director && !agency ? { leads: L.filter((o) => o.agencyId === null).length, agents: ownAgents } : null,
+    reasons: [...RS.entries()].map(([code, n]) => ({ code, n })).sort((a, b) => b.n - a.n),
+    by: i.by === 'product' || i.agent || agency ? ('product' as const) : ('people' as const),
+    table,
+  };
+}
+
 async function confirmedKpis(ctx: Ctx, i: KfInput) {
   const R = kfRange(ctx.now(), i);
   const upd = i.basis === 'updated';
@@ -1617,5 +1767,6 @@ export const confirmationProcs = {
   'confirmation.confirmed': proc([...MGR], KfInput, (ctx, i) => confirmedKpis(ctx, i)),
   /** Confirmation › Statistiques: leads, Leads quality, why we lose them, upsell, speed, agents and products. */
   'confirmation.overview': proc([...MGR], KfInput, (ctx, i) => overview(ctx, i)),
+  'confirmation.confirmees': proc([...MGR], CfInput, (ctx, i) => confirmeesStats(ctx, i)),
 };
 

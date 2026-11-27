@@ -118,3 +118,42 @@ test('En cours › Statistiques: today only, the closed orders add up, a manager
     }
   }
 });
+
+test('Confirmées › Statistiques: taux (pending counted), the table adds up to the cards, one agent → per product', async () => {
+  const now = Date.now();
+  const KF30 = { per: '30', basis: 'updated' } as const;
+  await assert.rejects(call('confirmation.confirmees', await at(EMAILS.conf, now), KF30), /Accès refusé/);
+  for (const who of ['vendeur', 'manager'] as const) {
+    const ctx = await at(EMAILS[who], now);
+    const s: any = await call('confirmation.confirmees', ctx, KF30);
+    const x = s.sum;
+    assert.ok(x.qualified <= x.leads && x.confirmed <= x.qualified && x.upsell <= x.confirmed, `${who}: confirmed ⊂ qualified ⊂ leads`);
+    assert.ok(x.delivered <= x.shipped && x.shipped <= x.confirmed, `${who}: delivered ⊂ shipped ⊂ confirmed`);
+    // per agent (per team for the owner): every lead in one line, so the lines add up to the cards
+    for (const k of ['leads', 'qualified', 'confirmed', 'delivered'] as const)
+      assert.equal(s.table.reduce((n: number, r: any) => n + r[k], 0), x[k], `${who}: the lines add up (${k})`);
+    assert.equal(s.director, who === 'vendeur');
+    const real = s.reasons.reduce((n: number, r: any) => n + r.n, 0);
+    assert.ok(real <= x.qualified - x.confirmed, `${who}: the reasons are real clients' only`);
+    const one = s.agents[0];
+    if (one) {
+      const a: any = await call('confirmation.confirmees', ctx, { ...KF30, agent: one.id });
+      assert.equal(a.by, 'product', 'one agent: the table per product');
+      assert.ok(a.sum.leads <= x.leads);
+    }
+    const p: any = await call('confirmation.confirmees', ctx, { ...KF30, by: 'product' });
+    assert.equal(p.by, 'product');
+    for (const r of p.table) assert.ok(r.leads <= x.leads);
+  }
+  const mgr: any = await call('confirmation.confirmees', await at(EMAILS.manager, now), KF30);
+  const owner: any = await call('confirmation.confirmees', await at(EMAILS.vendeur, now), KF30);
+  assert.ok(mgr.sum.leads <= owner.sum.leads, 'a manager counts his team only');
+  assert.equal(mgr.teams, null);
+  const team = owner.teams.find((t: any) => t.kind === 'team');
+  if (team) {
+    const tv: any = await call('confirmation.confirmees', await at(EMAILS.vendeur, now), { ...KF30, team: team.key });
+    assert.equal(tv.director, false);
+    assert.equal(tv.team.key, team.key);
+    assert.ok(tv.sum.leads <= owner.sum.leads);
+  }
+});

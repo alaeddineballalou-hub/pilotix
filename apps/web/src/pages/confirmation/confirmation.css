@@ -228,7 +228,26 @@ html[data-theme="dark"] .px-sx-tile.warn { border-color: var(--warn-soft); }
 .px-sx-lgd { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 7px; font-size: 12.5px; }
 .px-sx-lgd i { display: inline-block; width: 10px; height: 10px; margin-inline-end: 6px; border-radius: 3px; }
 .px-sx-empty { margin: 0; font-size: 13px; color: var(--muted); }
+/* Confirmées › Statistiques: the filter pills, six cards (seven for the owner), why real clients said no */
+.px-cf .px-sx { padding-top: 14px; }
+.px-sx-fb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.px-sx-seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.px-sx-seg button { padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.px-sx-seg button.on { background: var(--navy); color: var(--on-navy); }
+.px-sx-sec .px-sx-seg button { padding: 3px 11px; font-size: 12.5px; }
+select.px-sx-pill { width: auto !important; height: 34px; padding: 0 30px 0 12px; border: 1px solid var(--line); border-radius: 999px; background-color: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; }
+select.px-sx-pill.ag { border-color: #F3DDB0; background-color: var(--butter); color: var(--warn); }
+.px-sx-t6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.px-sx-rs { display: grid; gap: 7px; }
+.px-sx-rs-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) 44px; align-items: center; gap: 10px; font-size: 13px; }
+.px-sx-rs-row .bk { height: 10px; overflow: hidden; border-radius: 5px; background: #E9EDF3; }
+html[data-theme="dark"] .px-sx-rs-row .bk { background: var(--line); }
+.px-sx-rs-row .bk div { height: 100%; border-radius: 5px; background: #E58A80; }
+.px-sx-rs-row .pc { color: var(--muted); text-align: end; }
+.px-sx-tbl th .px-help { width: 15px; height: 15px; margin-inline-start: 4px; }
 @media (max-width: 760px) {
   .px-sx { padding: 0 12px 12px; }
   .px-sx-t3, .px-sx-t4 { grid-template-columns: 1fr 1fr; }
+  .px-sx-t6 { grid-template-columns: 1fr 1fr; }
+  .px-sx-rs-row { grid-template-columns: minmax(0, 1fr) 90px 40px; }
 }
