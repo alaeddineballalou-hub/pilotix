@@ -216,6 +216,7 @@ html[data-theme="dark"] .px-sx-tile.warn { border-color: var(--warn-soft); }
 /* the « ? » of a tile: its short explanation on hover */
 .px-sx-tile .lb .px-help { width: 15px; height: 15px; margin-inline-start: 5px; vertical-align: -2px; }
 .px-sx-tile.main .lb .px-help { background: rgba(255, 255, 255, .16); color: #fff; border-color: transparent; }
+html[data-theme="dark"] .px-sx-tile.main .lb .px-help { background: rgba(15, 26, 46, .14); color: var(--on-navy); }
 /* En cours: how today's closed orders ended (reached: confirmed, said no · never reached) */
 .px-sx-bar { padding: 2px 0 0; }
 .px-sx-brk { display: flex; gap: 2px; margin-bottom: 5px; }
@@ -233,9 +234,18 @@ html[data-theme="dark"] .px-sx-tile.warn { border-color: var(--warn-soft); }
 .px-sx-fb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .px-sx-seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
 .px-sx-seg button { padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.px-sx-fb .px-sx-seg { box-sizing: border-box; height: 36px; }
+.px-sx-fb .px-sx-seg button { padding: 0 14px; }
 .px-sx-seg button.on { background: var(--navy); color: var(--on-navy); }
 .px-sx-sec .px-sx-seg button { padding: 3px 11px; font-size: 12.5px; }
-select.px-sx-pill { width: auto !important; max-width: 210px !important; height: 34px; padding: 0 30px 0 12px; border: 1px solid var(--line); border-radius: 999px; background-color: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; }
+select.px-sx-pill { width: auto !important; max-width: 210px !important; height: 36px !important; min-height: 36px !important; padding: 0 32px 0 14px !important; border: 1px solid var(--line); border-radius: 999px !important; background-color: var(--surface); color: var(--ink); font-size: 13px !important; font-weight: 500; }
+/* the dates: one pill for the period, one « Personnalisé »; the calendar opens from their left edge, inside the card */
+.px-sx-fb .px-dr { display: inline-flex; gap: 8px; }
+.px-sx-fb .px-dr-btn { height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; }
+.px-dr-custom { height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.px-dr-custom:hover { border-color: var(--navy); }
+.px-dr-custom.on { border-color: var(--navy); background: var(--navy); color: var(--on-navy); }
+.px-sx-fb .px-dr-pop { inset-inline-start: 0; inset-inline-end: auto; }
 select.px-sx-pill.ag { border-color: #F3DDB0; background-color: var(--butter); color: var(--warn); }
 .px-sx-t6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .px-sx-rs { display: grid; gap: 7px; }

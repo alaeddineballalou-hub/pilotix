@@ -43,7 +43,9 @@ export function periodLabel(t: (k: string) => string, lang: string, kf: Kf) {
   return kf.per === 'custom' ? rangeText(lang, { from: kf.from || algToday(), to: kf.to || algToday() }) : t(`confirmation.per.${kf.per}`);
 }
 
-export function DateRange({ kf, onChange }: { kf: Kf; onChange: (p: Pick<Kf, 'per' | 'from' | 'to'>) => void }) {
+/** `custom`: a « Personnalisé » pill next to the button, which opens the calendar too (Confirmées › Statistiques, as the
+ *  owner's sketch: « 30 derniers jours ▾ » then « Personnalisé »). */
+export function DateRange({ kf, onChange, custom }: { kf: Kf; onChange: (p: Pick<Kf, 'per' | 'from' | 'to'>) => void; custom?: boolean }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language || 'fr';
   const loc = locOf(lang);
@@ -111,6 +113,11 @@ export function DateRange({ kf, onChange }: { kf: Kf; onChange: (p: Pick<Kf, 'pe
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
+      {custom && (
+        <button type="button" className={`px-dr-custom${kf.per === 'custom' ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => (open ? close() : show())}>
+          {t('confirmation.dr.custom')}
+        </button>
+      )}
       {open && (
         <>
           <div className="px-dr-veil" onClick={close} aria-hidden="true" />

@@ -600,7 +600,8 @@
     "next": "Mois suivant",
     "hint": "Cliquez sur le 1er jour, puis sur le dernier",
     "cancel": "Annuler",
-    "apply": "Appliquer"
+    "apply": "Appliquer",
+    "custom": "Personnalisé"
   },
   "ph": {
     "client": "Client",

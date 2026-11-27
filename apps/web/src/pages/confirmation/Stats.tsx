@@ -1336,7 +1336,7 @@ function CfFilters({ f, setF, D }: { f: CfF; setF: (p: Partial<CfF>) => void; D:
   const kf: Kf = { per: f.per, basis: f.basis, from: f.from, to: f.to, view: 'conf' };
   return (
     <div className="px-sx-fb">
-      <DateRange kf={kf} onChange={(p) => setF({ per: p.per, from: p.from, to: p.to })} />
+      <DateRange custom kf={kf} onChange={(p) => setF({ per: p.per, from: p.from, to: p.to })} />
       <div className="px-sx-seg" role="radiogroup" aria-label={t('confirmation.stats.basis')}>
         {(['created', 'updated'] as const).map((b) => (
           <button key={b} type="button" role="radio" aria-checked={f.basis === b} className={f.basis === b ? 'on' : ''} onClick={() => setF({ basis: b })}>
