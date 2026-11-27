@@ -1740,7 +1740,7 @@ export const suiviProcs = {
    * His own parcels first (once he acted on a parcel it stays his until it ends), then the alerts of nobody — or of an
    * agent not seen for 8 hours (off today) — the oldest alert first.
    */
-  'suivi.next': proc(['suivi'], z.object({ skip: z.array(id).max(200).default([]), release: id.nullable().optional(), only: z.enum(['stuck']).optional() }), async (ctx, i) => {
+  'suivi.next': proc(['suivi'], z.object({ skip: z.array(id).max(200).default([]), release: id.nullable().optional(), only: z.enum(['stuck', 'alerts']).optional() }), async (ctx, i) => {
     const me = ctx.session.profile.id;
     if (i.release) await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND locked_by = $2', [i.release, me]);
     // picked and locked in one statement: two agents pressing at the same time never get the same parcel
@@ -1761,6 +1761,8 @@ export const suiviProcs = {
       const order = await getOrder(ctx, num(r[0].id));
       return { id: order.id, kind: 'alert' as const, order, extra: (await extras(ctx, [order], ctx.now()))[order.id] ?? null };
     }
+    // « alerts »: an agency's « Tous les vendeurs » asks each seller for an alert first, never taking a Bloqué meanwhile
+    if (i.only === 'alerts') return { id: null, kind: null, order: null, extra: null };
     // no alert left: the Bloqués nobody handled yet, the longest without news first
     const stuck = [...(await stuckParcels(ctx, undefined, true)).entries()].filter(([oid, x]) => !x.handled && !i.skip.includes(oid)).sort((a, b) => b[1].days - a[1].days);
     for (const [oid, x] of stuck) {

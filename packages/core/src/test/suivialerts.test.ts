@@ -387,3 +387,19 @@ test('Alertes: « Nouvelles alertes » (nobody acted since it came) and « Alert
   // the two lists hold every alert, nothing else (a relivrée parcel is back on the road: the owner, 25 Nov 2026)
   assert.equal(c.alertes_new + c.alertes_encours, c.alertes);
 });
+
+test('« Alerte suivante » for every seller (an agency, 27 Nov 2026): « alerts » asks for an alert only, never taking a Bloqué', async () => {
+  const suivi = await as(EMAILS.suivi);
+  await db.query(`UPDATE orders SET follow_status = 'out_for_delivery', locked_by = NULL, locked_until = NULL WHERE follow_status = 'alert'`);
+  const locks = async () => (await db.query(`SELECT count(*)::int AS n FROM orders WHERE locked_by = $1 AND locked_until > now()`, [suivi.session.profile.id]))[0].n;
+  const before = await locks();
+  const none = (await call('suivi.next', suivi, { only: 'alerts' })) as any;
+  assert.equal(none.id, null, 'no alert: nothing, even if a Bloqué waits');
+  assert.equal(await locks(), before, 'nothing taken');
+  const a = await onRoad();
+  await db.query(`UPDATE orders SET follow_status = 'alert', follow_agent_id = NULL, follow_agency_id = NULL WHERE id = $1`, [a]);
+  const r = (await call('suivi.next', suivi, { only: 'alerts' })) as any;
+  assert.equal(r.id, a);
+  assert.equal(r.kind, 'alert');
+  await call('suivi.release', suivi, { id: a });
+});

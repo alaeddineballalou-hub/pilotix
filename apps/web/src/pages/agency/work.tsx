@@ -16,7 +16,7 @@ import { Focus } from '../confirmation/Focus';
 import type { PageProps } from '../registry';
 import { Commandes, DoneScreen } from '../orders';
 import { Sav } from '../sav';
-import { List as SuiviList, Suivi } from '../suivi';
+import { ClairList, List as SuiviList, Suivi } from '../suivi';
 
 /** « Confirmation » of an agency: one seller's screen, or every seller's orders together. */
 export function AgencyConfirmation(props: PageProps) {
@@ -219,15 +219,21 @@ export function AllSuivi({ sub, scope }: PageProps & { scope?: AllScope }) {
   const { t } = useTranslation();
   const { has } = useSession();
   const work = useSellers(!scope);
-  const asked: Tab = TABS.includes(sub as Tab) ? (sub as Tab) : 'enlivraison';
+  // « alertes-new » is « alertes_new » (the Deploy page's « Essayer » links carry dashes)
+  const sub_ = sub?.replace(/-/g, '_');
+  const asked: Tab = TABS.includes(sub_ as Tab) ? (sub_ as Tab) : 'enlivraison';
   const tab: Tab = !has('suivi') && !['enlivraison', 'livres', 'annules'].includes(asked) ? 'enlivraison' : asked;
   const c = useRpc('suivi.counts', (scope?.counts ?? {}) as never, { refetchInterval: 60_000 }).data;
   return (
     <>
-      <StageBar flow={false} items={(scope?.tabs ?? stepLinks(tab)).map((k) => ({ key: k, label: t(k === 'traites' && !scope ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k as Tab] }))} current={tab} />
+      <StageBar flow={false} items={(scope?.tabs ?? stepLinks(tab)).map((k) => ({ key: k, label: t(k === 'traites' && !scope ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k as Tab] }))} current={tab === 'alertes' ? 'alertes_new' : tab} />
       {tab === 'annules' ? (
         // « Annulé » is the same screen everywhere (owner's choice, 24 Nov 2026), on its returns
         <DoneScreen sub="annulees" start="back" />
+      ) : !scope && (tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours') ? (
+        // the alerts in a store's « Clair » design (owner's choice, 27 Nov 2026): every seller in one list, « Alerte
+        // suivante » takes the most urgent alert of any seller the agency follows
+        <ClairList key={tab} tab={tab === 'alertes_encours' ? 'alertes_encours' : 'alertes_new'} allSellers={{ canWork: (id) => !!work.list.find((s) => s.id === id)?.tasks.includes('suivi') }} />
       ) : (
         <SuiviList key={tab} tab={tab} combined={{
           input: scope?.input, bar: scope?.bar,

@@ -324,6 +324,10 @@ const extraOf = (o: ParcelRow, extra: Record<number, Extra>) => o.seller ? o.ext
 function ParcelScope({ order, children, ambient = true }: { order: ParcelRow; children: ReactNode; ambient?: boolean }) {
   return order.seller ? <SellerScope seller={order.seller.id} ambient={ambient}>{children}</SellerScope> : <>{children}</>;
 }
+/** The alert taken with « Alerte suivante » in « Tous les vendeurs »: it talks to its own seller. */
+function FocusScope({ seller, children }: { seller?: number; children: ReactNode }) {
+  return seller ? <SellerScope seller={seller}>{children}</SellerScope> : <>{children}</>;
+}
 
 /** The table shared by every Suivi list, with the column menu and the shared presets. */
 export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: ParcelRow[]; actions?: (o: ParcelRow) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
@@ -563,13 +567,15 @@ function SuiviFilters({ f, set, combined }: { f: SuiviF; set: (patch: Partial<Su
  * product, the period — and « Filtres » (a small panel) for the agent, the company and the livreur; on a phone the
  * search and « Filtres » only.
  */
-function ClairFilters({ f, set, phone }: { f: SuiviF; set: (patch: Partial<SuiviF>) => void; phone: boolean }) {
+function ClairFilters({ f, set, phone, all }: { f: SuiviF; set: (patch: Partial<SuiviF>) => void; phone: boolean; all?: boolean }) {
   const { t } = useTranslation();
   const { session, has } = useSession();
   const [open, setOpen] = useState(false);
   const boss = !!session?.isAdmin || has('vendeur', 'agent_manager');
   const opts = useFilterOptions();
-  const inPanel: (keyof SuiviF)[] = phone ? ['fagent', 'product', 'variant', 'company', 'livreur', 'wilaya', 'from', 'to'] : ['fagent', 'variant', 'company', 'livreur'];
+  // « Tous les vendeurs » (an agency): the search, the wilaya and the dates only — each seller has its own products,
+  // companies, livreurs and agents
+  const inPanel: (keyof SuiviF)[] = all ? (phone ? ['wilaya', 'from', 'to'] : []) : phone ? ['fagent', 'product', 'variant', 'company', 'livreur', 'wilaya', 'from', 'to'] : ['fagent', 'variant', 'company', 'livreur'];
   const on = inPanel.filter((k) => f[k]).length;
   const anyOn = (Object.keys(NO_SF) as (keyof SuiviF)[]).some((k) => k !== 'q' && f[k]);
   const variants = opts?.products.find((p) => String(p.id) === f.product)?.variants ?? [];
@@ -589,14 +595,16 @@ function ClairFilters({ f, set, phone }: { f: SuiviF; set: (patch: Partial<Suivi
               </option>
             ))}
           </select>
-          <select className="svc-fsel" aria-label={t('filters.product')} value={f.product} onChange={(e) => set({ product: e.target.value, variant: '' })}>
-            <option value="">{t('filters.allProducts')}</option>
-            {(opts?.products ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.active ? p.name : `${p.name} ${t('filters.off')}`}
-              </option>
-            ))}
-          </select>
+          {!all && (
+            <select className="svc-fsel" aria-label={t('filters.product')} value={f.product} onChange={(e) => set({ product: e.target.value, variant: '' })}>
+              <option value="">{t('filters.allProducts')}</option>
+              {(opts?.products ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.active ? p.name : `${p.name} ${t('filters.off')}`}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="svc-fd">
             <Icon name="calendar" />
             <input type="date" aria-label={t('filters.from')} title={t('filters.from')} value={f.from} max={f.to || undefined} onChange={(e) => set({ from: e.target.value })} />
@@ -605,7 +613,7 @@ function ClairFilters({ f, set, phone }: { f: SuiviF; set: (patch: Partial<Suivi
           </span>
         </>
       )}
-      <span className="svc-fmore">
+      {(!all || phone) && <span className="svc-fmore">
         <button type="button" className={`px-fbtn svc-fbtn${on ? ' on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
           <Icon name="sliders" /> {t('filters.toggle')}
           {on > 0 && <b className="ltr">{on}</b>}
@@ -613,9 +621,9 @@ function ClairFilters({ f, set, phone }: { f: SuiviF; set: (patch: Partial<Suivi
         {open && (
           <div className="filters open svc-fpanel">
             {phone && <WilayaFilter value={f.wilaya} onChange={(v) => set({ wilaya: v })} />}
-            {phone && <ProductFilter product={f.product} variant={f.variant} onChange={(v) => set(v)} />}
+            {phone && !all && <ProductFilter product={f.product} variant={f.variant} onChange={(v) => set(v)} />}
             {phone && <DateFilters from={f.from} to={f.to} onChange={(v) => set(v)} />}
-            {!phone && !!variants.length && (
+            {!phone && !all && !!variants.length && (
               <label className="field more-f">
                 <span className="lab">{t('filters.variant')}</span>
                 <select value={f.variant} onChange={(e) => set({ variant: e.target.value })}>
@@ -628,13 +636,13 @@ function ClairFilters({ f, set, phone }: { f: SuiviF; set: (patch: Partial<Suivi
                 </select>
               </label>
             )}
-            {boss && <AgentFilter kind="follow" value={f.fagent} onChange={(v) => set({ fagent: v })} />}
-            <CompanyFilter value={f.company} onChange={(v) => set({ company: v })} />
-            <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />
+            {!all && boss && <AgentFilter kind="follow" value={f.fagent} onChange={(v) => set({ fagent: v })} />}
+            {!all && <CompanyFilter value={f.company} onChange={(v) => set({ company: v })} />}
+            {!all && <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />}
             <ClearFilters on={anyOn} onClear={() => set({ ...NO_SF, q: f.q })} />
           </div>
         )}
-      </span>
+      </span>}
     </div>
   );
 }
@@ -915,7 +923,7 @@ type CDialog =
   | { kind: 'treat'; o: ParcelRow; start?: 'resolved' }
   | { kind: 'claim'; o: ParcelRow; toLivreur: boolean }
   | { kind: 'swap'; o: ParcelRow }
-  | { kind: 'sheet'; data: SwapResult & { fresh?: boolean } }
+  | { kind: 'sheet'; data: SwapResult & { fresh?: boolean }; seller?: ParcelRow['seller'] }
   | { kind: 'rappel'; o: ParcelRow }
   | { kind: 'fault'; o: ParcelRow }
   | { kind: 'hist'; o: ParcelRow }
@@ -926,7 +934,12 @@ type CDialog =
  * top that filter, one line per parcel (a card on a phone), the alert opened under its line (a page on a phone) with
  * « Statut » and « Relivrer ». Résolu fills itself when the company delivers; « Client annule » sends it to Swap.
  */
-function ClairList({ tab }: { tab: ClairTab }) {
+/**
+ * `allSellers`: an agency's « Tous les vendeurs » (owner's choice, 27 Nov 2026: the same design as a store's): every
+ * seller's lines in one list, each one talking to its own seller; « Alerte suivante » takes the most urgent alert of any
+ * seller the agency follows.
+ */
+export function ClairList({ tab, allSellers }: { tab: ClairTab; allSellers?: { canWork?: (sellerId: number) => boolean } }) {
   const { t } = useTranslation();
   const agency = useInAgency();
   const { has, session } = useSession();
@@ -959,14 +972,18 @@ function ClairList({ tab }: { tab: ClairTab }) {
     setPage(1);
   };
   const dq = useDebounced(f.q);
+  // « Tous les vendeurs »: the search, the wilaya and the dates (each seller has its own products, companies, agents)
+  const fIn: SuiviF = allSellers ? { ...NO_SF, q: f.q, wilaya: f.wilaya, from: f.from, to: f.to } : f;
   const setAssign = (v: Assign) => {
     setAssignState(v);
     if (v !== 'all' && f.fagent) setFilter({ fagent: '' });
     setPage(1);
   };
-  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(f, dq), ...(showAssign && assign !== 'all' ? { assigned: assign } : {}), ...(bucket ? { bucket: bucket as any } : {}) });
+  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(fIn, dq), ...(showAssign && assign !== 'all' ? { assigned: assign } : {}), ...(bucket ? { bucket: bucket as any } : {}) });
   const rows = (q.data?.rows ?? []) as ParcelRow[];
   const extra = (q.data?.extra ?? {}) as Record<number, ClairX>;
+  // a line of « Tous les vendeurs » carries its own details (order numbers repeat from one seller to another)
+  const xOf = (o: ParcelRow): ClairX | undefined => (o.seller ? ((o.extra ?? undefined) as ClairX | undefined) : extra[o.id]);
   const picked = rows.filter((o) => sel.has(clairKey(o)));
   const give = async (rs: ParcelRow[], agentId: number | null) => {
     try {
@@ -983,7 +1000,8 @@ function ClairList({ tab }: { tab: ClairTab }) {
       toast(e?.message ?? String(e), 'bad');
     }
   };
-  const pickOf: ClairPick | undefined = showAssign && (!phone || picking)
+  // giving alerts out: one seller at a time (« Tous les vendeurs » shows how many are given, the seller chosen gives them)
+  const pickOf: ClairPick | undefined = showAssign && !allSellers && (!phone || picking)
     ? {
         picked: sel,
         toggle: (o) => setSel((s0) => {
@@ -1001,12 +1019,32 @@ function ClairList({ tab }: { tab: ClairTab }) {
   const [dlg, setDlg] = useState<CDialog>(null);
   const opened = rows.find((r) => parcelKey(r) === openKey) ?? null;
   // « Alerte suivante »: the most urgent alert, taken (15 minutes) by this agent (as before)
-  const [focus, setFocus] = useState<{ id: number; x: Extra | null } | null>(null);
+  const [focus, setFocus] = useState<{ id: number; x: Extra | null; seller?: number } | null>(null);
   const [nexting, setNexting] = useState(false);
   const skip = useRef<number[]>([]);
+  const skipBy = useRef(new Map<number, number[]>());
   const nextAlert = async () => {
     setNexting(true);
     try {
+      if (allSellers) {
+        // the sellers in the order of the list (its most urgent line first), the ones the agency follows; an alert first
+        // everywhere, then a Bloqué
+        if (focus?.seller) await rpc('suivi.release', { id: focus.id }, focus.seller).catch(() => {});
+        const sellers = [...new Set(rows.map((o) => o.seller?.id).filter((s): s is number => !!s && (!allSellers.canWork || allSellers.canWork(s))))];
+        for (const only of ['alerts', undefined] as const) {
+          for (const s of sellers) {
+            const sk = skipBy.current.get(s) ?? [];
+            const r = await rpc('suivi.next', { skip: sk.slice(-200), release: null, ...(only ? { only } : {}) }, s);
+            if (!r.id) continue;
+            skipBy.current.set(s, [...sk, r.id]);
+            setFocus({ id: r.id, x: (r.extra as Extra | null) ?? null, seller: s });
+            return;
+          }
+        }
+        setFocus(null);
+        toast(t('suivi.nextNone'), 'ok');
+        return;
+      }
       const r = await rpc('suivi.next', { skip: skip.current.slice(-200), release: focus?.id ?? null });
       if (!r.id) {
         setFocus(null);
@@ -1022,9 +1060,10 @@ function ClairList({ tab }: { tab: ClairTab }) {
     }
   };
   const closeFocus = () => {
-    if (focus) rpc('suivi.release', { id: focus.id }).catch(() => {});
+    if (focus) rpc('suivi.release', { id: focus.id }, focus.seller).catch(() => {});
     setFocus(null);
     skip.current = [];
+    skipBy.current = new Map();
   };
   const works = canFollow && treats;
   const h: ClairHandlers = {
@@ -1035,12 +1074,12 @@ function ClairList({ tab }: { tab: ClairTab }) {
     },
     onSwap: (o) => setDlg({ kind: 'swap', o }),
     canSwap: (o) => canHandle && !!o.swapWay && rightOn('act:suivi.swap'),
-    canWork: () => works,
+    canWork: (o) => works && (!o.seller || !allSellers?.canWork || allSellers.canWork(o.seller.id)),
   };
   const pick = async (o: ParcelRow, k: StatusKey) => {
     if (k === 'no_answer' || k === 'busy') {
       try {
-        await rpc('suivi.callResult', { id: o.id, result: k });
+        await rpc('suivi.callResult', { id: o.id, result: k }, o.seller?.id);
         toast(t(`suivi.clair.done.${k}`, { ref: o.ref }), 'ok');
         void qc.invalidateQueries();
       } catch (e: any) {
@@ -1049,12 +1088,12 @@ function ClairList({ tab }: { tab: ClairTab }) {
       return;
     }
     if (k === 'callback') return setDlg({ kind: 'rappel', o });
-    if (k === 'claim') return setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' });
+    if (k === 'claim') return setDlg({ kind: 'claim', o, toLivreur: xOf(o)?.companyKind === 'own' });
     setDlg({ kind: 'fault', o });
   };
   // « Client annule »: the problems report first (who is responsible; no photo, the customer never had it), then Swap
   const cancelClient = (o: ParcelRow) =>
-    rpc('suivi.act', { id: o.id, action: 'cancel', by: 'client' }).then(
+    rpc('suivi.act', { id: o.id, action: 'cancel', by: 'client' }, o.seller?.id).then(
       () => {
         toast(t('suivi.clair.done.cancel', { ref: o.ref }), 'ok');
         setOpenKey(null);
@@ -1062,9 +1101,9 @@ function ClairList({ tab }: { tab: ClairTab }) {
       },
       (e) => toast(e.message, 'bad'),
     );
-  const menuFor = (o: ParcelRow) => <StatusMenu o={o} x={extra[o.id]} onPick={(k) => void pick(o, k)} onClose={() => setMenu(false)} />;
+  const menuFor = (o: ParcelRow) => <StatusMenu o={o} x={xOf(o)} onPick={(k) => void pick(o, k)} onClose={() => setMenu(false)} />;
   const relivrer = (o: ParcelRow) => (works && o.followStatus === 'alert' ? () => setDlg({ kind: 'treat', o, start: 'resolved' }) : undefined);
-  const claimOf = (o: ParcelRow) => (agency || !canHandle || !rightOn('act:suivi.claim') ? undefined : () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }));
+  const claimOf = (o: ParcelRow) => (agency || !canHandle || !rightOn('act:suivi.claim') ? undefined : () => setDlg({ kind: 'claim', o, toLivreur: xOf(o)?.companyKind === 'own' }));
   const title = t(`suivi.clair.tab.${tab}`);
   return (
     <div className="card">
@@ -1080,9 +1119,9 @@ function ClairList({ tab }: { tab: ClairTab }) {
       </div>
       {/* a phone: the counters first, under the title (seen without scrolling); a computer: as the design, under the filters */}
       {phone && <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />}
-      <ClairFilters f={f} set={setFilter} phone={phone} />
+      <ClairFilters f={fIn} set={setFilter} phone={phone} all={!!allSellers} />
       {!phone && <ClairCounters tab={tab} counts={q.data?.buckets} value={bucket} onPick={setBucket} />}
-      {phone && showAssign && (picking || rows.length > 0) && (
+      {phone && showAssign && !allSellers && (picking || rows.length > 0) && (
         <div className="pxp-sum">
           <PickToggle
             on={picking}
@@ -1095,7 +1134,7 @@ function ClairList({ tab }: { tab: ClairTab }) {
           />
         </div>
       )}
-      {!phone && showAssign && rows.length > 0 && <GiveBar rows={picked} agents={giveTo} onGive={(rs, id) => void give(rs as ParcelRow[], id)} onClear={() => setSel(new Set())} />}
+      {!phone && showAssign && !allSellers && rows.length > 0 && <GiveBar rows={picked} agents={giveTo} onGive={(rs, id) => void give(rs as ParcelRow[], id)} onClear={() => setSel(new Set())} />}
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (
@@ -1112,17 +1151,19 @@ function ClairList({ tab }: { tab: ClairTab }) {
           h={h}
           pick={pickOf}
           open={(o) =>
-            o.followStatus === 'alert' || extra[o.id]?.bucket === 'zr' ? (
-              <AlertPanel
-                o={o}
-                x={extra[o.id]}
-                reason={reasonOf(o, extra[o.id])}
-                statusOpen={menu}
-                onStatus={() => setMenu((v) => !v)}
-                menu={works ? menuFor(o) : null}
-                onRelivrer={relivrer(o)}
-                onClaim={claimOf(o)}
-              />
+            o.followStatus === 'alert' || xOf(o)?.bucket === 'zr' ? (
+              <ParcelScope order={o}>
+                <AlertPanel
+                  o={o}
+                  x={xOf(o)}
+                  reason={reasonOf(o, xOf(o))}
+                  statusOpen={menu}
+                  onStatus={() => setMenu((v) => !v)}
+                  menu={h.canWork(o) ? menuFor(o) : null}
+                  onRelivrer={h.canWork(o) ? relivrer(o) : undefined}
+                  onClaim={claimOf(o)}
+                />
+              </ParcelScope>
             ) : null
           }
         />
@@ -1145,38 +1186,38 @@ function ClairList({ tab }: { tab: ClairTab }) {
       {/* the demo's carrier simulation: after the list (the counters and the lines come first) */}
       {!agency && <DemoCourier rows={rows} />}
       {phone && opened && working && (
-        <ParcelPage
+        <ParcelScope order={opened}><ParcelPage
           o={opened}
-          x={extra[opened.id]}
-          reason={reasonOf(opened, extra[opened.id])}
+          x={xOf(opened)}
+          reason={reasonOf(opened, xOf(opened))}
           actions={[]}
           onClaim={claimOf(opened)}
           onClose={() => (setOpenKey(null), setMenu(false))}
           clair={
-            works
+            h.canWork(opened)
               ? { statusLabel: t('suivi.clair.status'), menuOpen: menu, onStatus: () => setMenu((v) => !v), menu: menuFor(opened), onRelivrer: relivrer(opened), onHistory: () => setDlg({ kind: 'hist', o: opened }) }
               : { statusLabel: t('suivi.clair.status'), menuOpen: false, onStatus: () => {}, menu: null, onHistory: () => setDlg({ kind: 'hist', o: opened }) }
           }
-        />
+        /></ParcelScope>
       )}
       {focus && (
-        <FocusAlert
+        <FocusScope seller={focus.seller}><FocusAlert
           kind="alert"
           id={focus.id}
-          x={extra[focus.id] ?? focus.x}
+          x={(focus.seller ? null : extra[focus.id]) ?? focus.x}
           onLeft={nextAlert}
           onClose={closeFocus}
           actions={(o) => (treats ? [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o: o as ParcelRow }) }] : []) as ParcelAction[]}
           onClaim={agency || !rightOn('act:suivi.claim') ? undefined : (o) => setDlg({ kind: 'claim', o: o as ParcelRow, toLivreur: focus.x?.companyKind === 'own' })}
-        />
+        /></FocusScope>
       )}
       {dlg?.kind === 'treat' && (
-        <Traiter o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} tries={extra[dlg.o.id]?.tries} own={extra[dlg.o.id]?.companyKind === 'own'} start={dlg.start} onClose={() => setDlg(null)} />
+        <ParcelScope order={dlg.o}><Traiter o={dlg.o} reason={reasonOf(dlg.o, xOf(dlg.o) ?? (focus?.id === dlg.o.id ? focus.x ?? undefined : undefined))} tries={(xOf(dlg.o) ?? (focus?.id === dlg.o.id ? focus.x : null))?.tries} own={(xOf(dlg.o) ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'} start={dlg.start} onClose={() => setDlg(null)} /></ParcelScope>
       )}
-      {dlg?.kind === 'rappel' && <RappelSheet o={dlg.o} onClose={() => setDlg(null)} />}
-      {dlg?.kind === 'hist' && <HistorySheet o={dlg.o} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'rappel' && <ParcelScope order={dlg.o}><RappelSheet o={dlg.o} onClose={() => setDlg(null)} /></ParcelScope>}
+      {dlg?.kind === 'hist' && <ParcelScope order={dlg.o}><HistorySheet o={dlg.o} onClose={() => setDlg(null)} /></ParcelScope>}
       {dlg?.kind === 'fault' && (
-        <FaultSheet
+        <ParcelScope order={dlg.o}><FaultSheet
           orderId={dlg.o.id}
           moment="swap"
           cancel
@@ -1185,11 +1226,11 @@ function ClairList({ tab }: { tab: ClairTab }) {
             const o = dlg.o;
             void cancelClient(o);
           }}
-        />
+        /></ParcelScope>
       )}
-      {dlg?.kind === 'swap' && <SwapModal o={dlg.o} onClose={() => setDlg(null)} onDone={(data) => setDlg({ kind: 'sheet', data: { ...data, fresh: true } })} />}
-      {dlg?.kind === 'sheet' && <SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} />}
-      {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extra[dlg.o.id]) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extra[dlg.o.id]) }) : ''} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'swap' && <ParcelScope order={dlg.o}><SwapModal o={dlg.o} onClose={() => setDlg(null)} onDone={(data) => setDlg({ kind: 'sheet', data: { ...data, fresh: true }, seller: dlg.o.seller })} /></ParcelScope>}
+      {dlg?.kind === 'sheet' && (dlg.seller ? <SellerScope seller={dlg.seller.id}><SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} /></SellerScope> : <SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} />)}
+      {dlg?.kind === 'claim' && <ParcelScope order={dlg.o}><NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, xOf(dlg.o)) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, xOf(dlg.o)) }) : ''} onClose={() => setDlg(null)} /></ParcelScope>}
     </div>
   );
 }

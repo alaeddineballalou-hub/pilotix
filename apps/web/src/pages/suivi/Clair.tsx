@@ -50,7 +50,9 @@ export type ClairX = PExtra & {
   backWhy?: string | null;
   bucket?: string;
 };
-export type ClairRow = Order & { seller?: { id: number; name: string } };
+export type ClairRow = Order & { seller?: { id: number; name: string }; extra?: ClairX | null };
+/** A line's details: its own on a line of « Tous les vendeurs » (order numbers repeat from one seller to another). */
+export const clairX = (o: ClairRow, extra: Record<number, ClairX>): ClairX | undefined => (o.seller ? (o.extra ?? undefined) : extra[o.id]);
 export type StatusKey = 'no_answer' | 'busy' | 'callback' | 'claim' | 'cancel';
 
 /** The three counters over a list: a tap shows only those parcels, a second tap (or « Tous ») all of them. */
@@ -216,13 +218,13 @@ export interface ClairHandlers {
 }
 
 /** Call and WhatsApp, round (they ask how, like Confirmation; a call is written on the order). */
-export function CallMsg({ o }: { o: Order }) {
+export function CallMsg({ o }: { o: ClairRow }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   if (o.phoneHidden) return null;
   return (
     <span className="svc-cm" onClick={(e) => e.stopPropagation()}>
-      <AskCall phone={o.phone} className="svc-ib call" label={`${t('suivi.act.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
+      <AskCall phone={o.phone} className="svc-ib call" label={`${t('suivi.act.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }, o.seller?.id).then(() => qc.invalidateQueries(), () => {})}>
         <Icon name="phone" />
       </AskCall>
       <AskMsg order={o} ready={t('suivi.ph.waText', { nom: o.customerName, ref: o.ref })} className="svc-ib wa" label={`${t('suivi.ph.message')} ${o.phone}`}>
@@ -249,7 +251,7 @@ export function ClairTable({ tab, rows, extra, reasonOf, openKey, open, h, pick 
           : [{ k: 'order', l: t('suivi.col.order') }, { k: 'client', l: t('suivi.col.client') }, { k: 'product', l: t('suivi.col.products'), cls: 'svc-hide-tb' }, { k: 'amount', l: t('suivi.clair.amount'), cls: 'num' }, { k: 'why', l: t('suivi.clair.why') }, { k: 'since', l: t('suivi.clair.since'), cls: 'num svc-hide-tb' }, { k: 'act', l: '' }];
   const opens = v === 'alertes_new' || v === 'alertes_encours';
   const cell = (o: ClairRow, k: string): ReactNode => {
-    const x = extra[o.id];
+    const x = clairX(o, extra);
     const reason = reasonOf(o, x);
     switch (k) {
       case 'order':
@@ -489,7 +491,7 @@ export function ClairCards({ tab, rows, extra, reasonOf, h, pick }: { tab: Clair
   return (
     <ul className={`svc-cards svt-${v}`}>
       {rows.map((o) => {
-        const x = extra[o.id];
+        const x = clairX(o, extra);
         const reason = reasonOf(o, x);
         const fx = v === 'alertes_new' ? fixOf(reason) : null;
         const right =

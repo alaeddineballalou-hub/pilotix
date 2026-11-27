@@ -136,3 +136,10 @@ test('Terminé › Annulé over every shop: the reasons add up, the money only w
   const noMoney = CANCEL_REPORT_FAN.merge([part(1, rep(3, null, [])), part(2, rep(2, null, []))], {});
   assert.equal(noMoney.returns.fees, null);
 });
+
+test('Suivi « Tous les vendeurs »: the counters (En retard, À appeler vite, À temps) are added up over the sellers', () => {
+  const list = (n: number, late: number, soon: number) => ({ rows: Array.from({ length: n }, (_, k) => ({ id: k + 1, ref: `PX${k}`, updatedAt: '2026-11-27T10:00:00Z' })), total: n, page: 1, pageSize: 100, extra: {}, assign: null, buckets: { late, soon, ok: 0 } });
+  const out = FANOUT['suivi.list'].merge([part(1, list(2, 1, 1)), part(2, list(3, 2, 0))], { tab: 'alertes_new', page: 1, pageSize: 100 });
+  assert.deepEqual(out.buckets, { late: 3, soon: 1, ok: 0 });
+  assert.equal(out.total, 5);
+});

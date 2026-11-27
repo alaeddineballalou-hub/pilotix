@@ -313,7 +313,8 @@ export const FANOUT: Record<string, Fan> = {
       const o = SUIVI_SORT[i?.tab] ?? SUIVI_SORT.alertes;
       // each row carries its shop's extra details (ids repeat from one shop to another)
       const out = mergeRows(parts, o.key, o.dir, i?.page ?? 1, i?.pageSize ?? 300, (r, p) => ({ ...r, extra: p.out?.extra?.[r.id] ?? null }));
-      return { ...out, extra: {}, assign: sumAssign(parts) };
+      // Suivi · Clair's counters (En retard, À appeler vite, À temps) added up over the sellers
+      return { ...out, extra: {}, assign: sumAssign(parts), buckets: sumBuckets(parts) };
     },
   },
 };
