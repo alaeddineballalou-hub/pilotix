@@ -1142,6 +1142,7 @@
     "late": "Late",
     "noAgent": "Not assigned",
     "byAgent": "Each agent · today",
+    "cAgent": "Agent",
     "cCalled": "Called",
     "cUnder5": "< 5 min",
     "cMedian": "Median",

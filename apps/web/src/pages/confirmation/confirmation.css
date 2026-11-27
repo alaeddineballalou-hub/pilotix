@@ -183,8 +183,8 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 .px-sx-grp > div { display: flex; flex-direction: column; min-width: 0; }
 .px-sx-gh { margin-bottom: 5px; font-size: 12.5px; color: var(--muted); }
 .px-sx-gt { display: grid; flex: 1; gap: 10px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-.px-sx-tile { min-width: 0; padding: 10px 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
-.px-sx-tile .lb { font-size: 12.5px; color: var(--muted); }
+.px-sx-tile { min-width: 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.px-sx-tile .lb { font-size: 12px; color: var(--muted); }
 .px-sx-tile .v { font-size: 24px; font-weight: 500; line-height: 1.25; color: var(--ink); white-space: nowrap; }
 .px-sx-tile .gl { font-size: 12px; color: var(--muted); }
 .px-sx-tile .d { margin-top: 2px; font-size: 12.5px; font-weight: 500; }

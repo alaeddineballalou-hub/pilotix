@@ -126,10 +126,11 @@ function Tile({ label, value, gl, d, main, warn }: { label: string; value: strin
   );
 }
 
-/** A group of tiles (Volume, Vitesse, Résultat): as wide as its tiles. */
+/** A group of tiles (Volume, Vitesse, Résultat): as wide as its tiles (150 px at least each: else the next group goes
+ *  under, so a label never breaks). */
 function Group({ title, size, children }: { title: string; size: number; children: ReactNode }) {
   return (
-    <div style={{ flex: `${size} 1 ${size * 118}px` }}>
+    <div style={{ flex: `${size} 1 ${size * 150 + (size - 1) * 10}px` }}>
       <div className="px-sx-gh">{title}</div>
       <div className="px-sx-gt">{children}</div>
     </div>
@@ -236,7 +237,7 @@ function NvAgents({ D }: { D: Nv }) {
         <table className="tbl px-ov-tbl px-sx-tbl">
           <thead>
             <tr>
-              <th>{t('confirmation.col.agent')}</th>
+              <th>{t('confirmation.nv.cAgent')}</th>
               {cols.map((k) => (
                 <th key={k} className="num">{head(k)}</th>
               ))}
@@ -248,7 +249,7 @@ function NvAgents({ D }: { D: Nv }) {
                 const few = a.called < 20;
                 return (
                   <tr key={a.id} className={few ? 'few' : undefined} title={few ? t('confirmation.nv.few') : undefined}>
-                    <td data-l={t('confirmation.col.agent')}>{a.name}</td>
+                    <td data-l={t('confirmation.nv.cAgent')}>{a.name}</td>
                     {cells(a, !few, true)}
                   </tr>
                 );
@@ -260,7 +261,7 @@ function NvAgents({ D }: { D: Nv }) {
             )}
             {D.agents.length > 1 && (
               <tr className="tot">
-                <td data-l={t('confirmation.col.agent')}>{t('confirmation.nv.teamRow')}</td>
+                <td data-l={t('confirmation.nv.cAgent')}>{t('confirmation.nv.teamRow')}</td>
                 {cells({ ...A, late: D.agents.reduce((s, a) => s + a.late, 0) }, false, false)}
               </tr>
             )}

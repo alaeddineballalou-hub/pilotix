@@ -1142,6 +1142,7 @@
     "late": "En retard",
     "noAgent": "Non assignées",
     "byAgent": "Chaque agent · aujourd’hui",
+    "cAgent": "Agent",
     "cCalled": "Appelées",
     "cUnder5": "< 5 min",
     "cMedian": "Médian",
