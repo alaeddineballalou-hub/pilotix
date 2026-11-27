@@ -28,7 +28,8 @@ import { NextAction, TryDots } from './counters';
 import { useAgentName } from '../../lib/agentName';
 
 /** a queue row: the order with its call countdown */
-type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string }; lastBusy?: boolean };
+/** (`tries`: its own shop's number of tries, when the list holds several shops' orders) */
+type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null; seller?: { id: number; name: string }; lastBusy?: boolean; tries?: number | null };
 
 const variantsLine = (o: Order) =>
   o.items
@@ -219,7 +220,7 @@ export function PhoneCards({ rows, empty, onOpen, pick, showAgent, rowKey, edit,
                   <div className="pxp-st">
                     {dots !== undefined ? (
                       <>
-                        <TryDots made={o.attempts} max={dots} />
+                        <TryDots made={o.attempts} max={o.tries ?? dots} />
                         <NextAction status={o.confStatus} nextCallAt={o.nextCallAt} lastBusy={o.lastBusy} />
                       </>
                     ) : (

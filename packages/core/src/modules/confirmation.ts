@@ -226,6 +226,11 @@ export interface QueueRow extends Order {
   rotateAt: number | null;
   /** its last call was « Occupé » (En cours says « Occupé » next to its tries) */
   lastBusy: boolean;
+  /**
+   * its shop's « annuler après N tentatives » (En cours' dots), on each row: in « Tous les vendeurs » and « Toutes les
+   * boutiques » the rows of several shops are in one list, each with its own number (null: not a queue list)
+   */
+  tries: number | null;
 }
 
 const QueueInput = z.object({
@@ -423,18 +428,27 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     passed: passedOf.get(o.id) ?? [],
     rotateAt: rot.get(o.id) ?? null,
     lastBusy: busyLast.has(o.id),
+    tries,
   }));
   return { ...page, rows, assign, buckets, tries };
 }
 
 // ---------------------------------------------------------------- KPI blocks
+/**
+ * What « Statistiques » count: the same orders as the person's lists (owner's choice, 27 Nov 2026 — Confirmation in three
+ * views). The Super admin view (the owner, the administrators): every order of the shop; the Admin view (an agent
+ * manager): his team's and the ones no agent has yet, never another manager's team (82 in the numbers and 50 in his list
+ * before). `alias`: the table's name or alias in the query ('sales' when it has none).
+ */
+const statsSql = (ctx: Ctx, alias: string) => andSql(queueSql(ctx, 'conf', alias));
+
 async function firstCall(ctx: Ctx, i: KfInput) {
   const now = ctx.now();
   const calls = await getSetting(ctx.db, 'calls');
   const R = kfRange(now, i);
   const made = await ctx.db.query(
     `SELECT id, ref, customer_name, created_at, assigned_at, agent_id, conf_status FROM sales
-      WHERE (created_at >= $1 AND created_at < $2) OR conf_status IN ('new','to_check')`,
+      WHERE ((created_at >= $1 AND created_at < $2) OR conf_status IN ('new','to_check'))${statsSql(ctx, 'sales')}`,
     [isoT(R.a - DAY), isoT(R.b)],
   );
   const all = made.map((r: any) => {
@@ -472,7 +486,7 @@ async function firstCall(ctx: Ctx, i: KfInput) {
       called.push({ d: Math.max(0, (f.at - x.s) / MIN), ok: f.at <= due });
     }
   // waiting now
-  const todo = await loadTodo(ctx.db);
+  const todo = await loadTodo(ctx.db, queueSql(ctx, 'conf'));
   const waitingRows = todo.filter((o) => (o.status === 'new' || o.status === 'to_check') && o.attempts === 0 && !o.nextCallAt && !first.has(o.id));
   const due = computeDue(waitingRows, calls, now);
   const waiting = waitingRows.map((o) => ({ o, s: due.get(o.id)!.start, at: due.get(o.id)!.at ?? o.start }));
@@ -500,7 +514,7 @@ async function firstCall(ctx: Ctx, i: KfInput) {
 async function periodNew(ctx: Ctx, i: KfInput) {
   const R = kfRange(ctx.now(), i);
   const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
-  const O = await ctx.db.query(`SELECT id, conf_status, attempts, agent_id, total FROM sales WHERE ${col} >= $1 AND ${col} < $2`, [isoT(R.a), isoT(R.b)]);
+  const O = await ctx.db.query(`SELECT id, conf_status, attempts, agent_id, total FROM sales WHERE ${col} >= $1 AND ${col} < $2${statsSql(ctx, 'sales')}`, [isoT(R.a), isoT(R.b)]);
   const news = O.filter((o: any) => o.conf_status === 'new' || o.conf_status === 'to_check');
   const called = O.filter((o: any) => num(o.attempts) > 0 || !['new', 'to_check'].includes(o.conf_status));
   const conf = O.filter((o: any) => o.conf_status === 'confirmed').length;
@@ -526,7 +540,7 @@ const BACK = ['returning', 'returned', 'lost'];
 async function deliveryPerf(ctx: Ctx, i: KfInput & { on: 'created' | 'confirmed' }) {
   const R = kfRange(ctx.now(), i);
   const col = i.on === 'confirmed' && i.basis === 'updated' ? 'confirmed_at' : 'created_at';
-  const O = await ctx.db.query(`SELECT total, follow_status FROM sales WHERE conf_status = 'confirmed' AND ${col} >= $1 AND ${col} < $2`, [isoT(R.a), isoT(R.b)]);
+  const O = await ctx.db.query(`SELECT total, follow_status FROM sales WHERE conf_status = 'confirmed' AND ${col} >= $1 AND ${col} < $2${statsSql(ctx, 'sales')}`, [isoT(R.a), isoT(R.b)]);
   const f = (L: string[]) => O.filter((o: any) => L.includes(o.follow_status));
   const val = (L: any[]) => L.reduce((s: number, o: any) => s + num(o.total), 0);
   const ok = f(OK);
@@ -555,15 +569,15 @@ async function enCours(ctx: Ctx, i: KfInput) {
   const R = kfRange(now, i);
   const upd = i.basis === 'updated';
   const ST = [...CONF_SUBS.attente] as string[];
-  const O = await ctx.db.query(`SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM sales WHERE conf_status = ANY($1)`, [ST]);
+  const O = await ctx.db.query(`SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM sales WHERE conf_status = ANY($1)${statsSql(ctx, 'sales')}`, [ST]);
   // orders settled on the period: confirmed, or cancelled by the client (not fake / duplicate / wrong number); an
   // abandoned cart only once confirmed (leadkind.ts)
   const S = await ctx.db.query(
     upd
       ? `SELECT o.agent_id, o.conf_status, o.attempts FROM sales o WHERE ((o.conf_status = 'confirmed' AND o.confirmed_at >= $1 AND o.confirmed_at < $2)
            OR (o.conf_status = 'cancelled' AND EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = 'cancelled' AND e.at >= $1 AND e.at < $2)))
-           AND ${teamCountsSql('o.')}`
-      : `SELECT agent_id, conf_status, attempts FROM sales WHERE conf_status IN ('confirmed', 'cancelled') AND created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}`,
+           AND ${teamCountsSql('o.')}${statsSql(ctx, 'o')}`
+      : `SELECT agent_id, conf_status, attempts FROM sales WHERE conf_status IN ('confirmed', 'cancelled') AND created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}${statsSql(ctx, 'sales')}`,
     [isoT(R.a), isoT(R.b)],
   );
   const nx = (o: any) => (o.next_call_at ? Date.parse(iso(o.next_call_at)) : null);
@@ -647,16 +661,16 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
   const upd = i.basis === 'updated';
   const cc = upd ? 'confirmed_at' : 'created_at';
   const O = await ctx.db.query(
-    `SELECT id, total, agent_id, created_at, confirmed_at, has_upsell, upsell_value FROM sales WHERE conf_status = 'confirmed' AND ${cc} >= $1 AND ${cc} < $2`,
+    `SELECT id, total, agent_id, created_at, confirmed_at, has_upsell, upsell_value FROM sales WHERE conf_status = 'confirmed' AND ${cc} >= $1 AND ${cc} < $2${statsSql(ctx, 'sales')}`,
     [isoT(R.a), isoT(R.b)],
   );
   const X = num(
     (
       await ctx.db.query(
         upd
-          ? `SELECT count(*)::int AS n FROM sales o WHERE o.conf_status = ANY($3) AND ${teamCountsSql('o.')} AND EXISTS
+          ? `SELECT count(*)::int AS n FROM sales o WHERE o.conf_status = ANY($3) AND ${teamCountsSql('o.')}${statsSql(ctx, 'o')} AND EXISTS
               (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = o.conf_status AND e.at >= $1 AND e.at < $2)`
-          : `SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($3) AND created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}`,
+          : `SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($3) AND created_at >= $1 AND created_at < $2 AND ${teamCountsSql()}${statsSql(ctx, 'sales')}`,
         [isoT(R.a), isoT(R.b), CANCELLED_LIKE],
       )
     )[0]?.n,
@@ -737,7 +751,7 @@ async function overview(ctx: Ctx, i: KfInput) {
   const calls = await getSetting(ctx.db, 'calls');
   const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
   const all = await ctx.db.query(
-    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value, came, next_call_at FROM sales WHERE ${col} >= $1 AND ${col} < $2`,
+    `SELECT id, conf_status, follow_status, agent_id, created_at, total, has_upsell, upsell_value, came, next_call_at FROM sales WHERE ${col} >= $1 AND ${col} < $2${statsSql(ctx, 'sales')}`,
     [isoT(R.a), isoT(R.b)],
   );
   // abandoned carts (leadkind.ts): on their own line; in the team's numbers only once confirmed

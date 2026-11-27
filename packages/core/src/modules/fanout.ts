@@ -59,6 +59,49 @@ function sumAssign(parts: Part[]): { free: number; given: number } | null {
   return got.length ? { free: got.reduce((n, a) => n + num(a.free), 0), given: got.reduce((n, a) => n + num(a.given), 0) } : null;
 }
 
+/**
+ * The counters over Nouvelles and En cours (En retard · À appeler vite · À temps…) over every shop: each shop counts its
+ * own list, they add up (null when no shop counted them). Before 27 Nov 2026 the merged lists had none: « Tous les
+ * vendeurs » (an agency) and « Toutes les boutiques » showed no counters at all.
+ */
+function sumBuckets(parts: Part[]): Record<string, number> | null {
+  const got = parts.map((p) => p.out?.buckets).filter((b): b is Record<string, unknown> => !!b && typeof b === 'object');
+  if (!got.length) return null;
+  const out: Record<string, number> = {};
+  for (const b of got) for (const [k, v] of Object.entries(b)) out[k] = (out[k] ?? 0) + num(v);
+  return out;
+}
+
+/**
+ * The red « Appels en retard » banner over every seller (an agency's agent, « Tous les vendeurs »): the numbers add up,
+ * and the next customer to call is chosen the way each shop chooses its own (banner(), confirmation.ts): the coming
+ * deadlines first, the soonest first, then the passed ones, the latest passed first.
+ */
+export const BANNER_FAN: Fan = {
+  merge: (parts) => {
+    const outs = parts.map((p) => p.out).filter(Boolean);
+    const add = (k: string) => outs.reduce((n, o) => n + num(o[k]), 0);
+    const now = Date.now();
+    const next = parts
+      .flatMap((p) => (p.out?.next?.deadline ? [{ ...p.out.next, seller: { id: p.seller.id, name: p.seller.name } }] : []))
+      .sort((a, b) => {
+        const A = Number(a.deadline.t);
+        const B = Number(b.deadline.t);
+        return Number(A < now) - Number(B < now) || (A < now ? B - A : A - B);
+      })[0];
+    return {
+      late: add('late'),
+      now: add('now'),
+      fresh: add('fresh'),
+      night: add('night'),
+      firstLate: add('firstLate'),
+      slot: outs.find((o) => o.slot)?.slot ?? null,
+      nightFrom: outs[0]?.nightFrom ?? 9,
+      next: next ?? null,
+    };
+  },
+};
+
 const CONF_KEY: Record<string, Key> = {
   deadline: (r) => {
     const d = r.deadline;
@@ -198,9 +241,17 @@ export const FANOUT: Record<string, Fan> = {
       let sort: string = i?.sort ?? def.sort;
       if (sort === 'deadline' && sub !== 'nouvelles' && sub !== 'attente') sort = 'created_at';
       const dir = i?.dir ?? (i?.sort ? (i.sort === 'total' || i.sort === 'score' ? 'desc' : 'asc') : def.dir);
-      return { ...mergeRows(parts, CONF_KEY[sort] ?? CONF_KEY.created_at, dir, i?.page ?? 1, i?.pageSize ?? 50), assign: sumAssign(parts) };
+      // each row keeps its shop's number of tries (En cours' dots); the list's own is the first shop's (old pages)
+      const tries = parts.find((p) => p.out?.tries)?.out.tries ?? null;
+      return {
+        ...mergeRows(parts, CONF_KEY[sort] ?? CONF_KEY.created_at, dir, i?.page ?? 1, i?.pageSize ?? 50, (r, p) => ({ ...r, tries: r.tries ?? p.out?.tries ?? null })),
+        assign: sumAssign(parts),
+        buckets: sumBuckets(parts),
+        tries,
+      };
     },
   },
+  'confirmation.banner': BANNER_FAN,
   'suivi.list': {
     paged: { defaultSize: 300, max: 500 },
     input: (i) => ({ ...i, page: 1, pageSize: Math.min(500, (i?.page ?? 1) * (i?.pageSize ?? 300)) }),

@@ -49,6 +49,27 @@ export const useSession = () => useContext(Ctx);
 export const seesAll = (s: Session | null | undefined) => !!s && (s.isAdmin || s.roles.includes('vendeur'));
 export const useSeesAll = () => seesAll(useContext(Ctx).session);
 
+/**
+ * The three views of Confirmation (owner's choice, 27 Nov 2026). The look of the page follows the view; which orders each
+ * person gets stays the server's rule (all / his team / his own), and a few buttons inside a view still follow
+ * Utilisateurs › Rôles (« Supprimer » the administrators only, « Export », « + Nouvelle commande »: never an agency's).
+ * - « super » — Super admin: the store's Administrateur and Vendeur, every order and the shop's numbers;
+ * - « admin » — Admin: an agent manager, a confirmation agency's chief and its chefs d'équipe: his team, he gives the
+ *   orders out (« Toutes / Non affectées / Affectées », « Assigner »);
+ * - « agent » — Agent: everyone else who confirms (an agent, a community manager, an agency's agent): his own orders, and
+ *   the red « Appels en retard » banner, the only view with it.
+ */
+export type ConfView = 'super' | 'admin' | 'agent';
+export function confViewOf(s: Session | null | undefined): ConfView {
+  if (!s) return 'agent';
+  // an agency's own space, or a seller's screens opened from there (AgentView): never the store's Super admin
+  const inAgency = s.shop?.kind === 'agency' || !!s.profile.agencyId;
+  if (!inAgency && (s.isAdmin || s.roles.includes('vendeur'))) return 'super';
+  if (s.roles.includes('agent_manager') || !!s.profile.agencyLead || (inAgency && s.isAdmin)) return 'admin';
+  return 'agent';
+}
+export const useConfView = () => confViewOf(useContext(Ctx).session);
+
 /** The session as the browser keeps it for offline use. */
 function keep(s: Session | null) {
   store.set('session', s ? JSON.stringify(s) : null);

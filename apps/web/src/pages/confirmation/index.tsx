@@ -9,7 +9,7 @@ import { da, dateTime, n, when, wilaya, wilayaName } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
 import { useRpc, useRpcFor } from '../../lib/query';
 import { SellerScope } from '../../lib/seller';
-import { seesAll as seesEveryOrder, useSession } from '../../lib/session';
+import { seesAll as seesEveryOrder, useConfView, useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { AgencyChip, ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, StageBar, StatusBadge } from '../../ui/kit';
 import { useAgentName } from '../../lib/agentName';
@@ -166,15 +166,19 @@ function ConfirmedView({ view, onChange }: { view: 'list' | 'stats'; onChange: (
 function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const { t } = useTranslation();
   const sub: Sub = SUBS.includes(rawSub as Sub) ? (rawSub as Sub) : 'nouvelles';
-  const { has, session } = useSession();
+  const { session } = useSession();
   const counts = useRpc('confirmation.counts', {}, { refetchInterval: 60_000 });
-  const manager = has('agent_manager', 'vendeur');
+  // the three views (lib/session › confViewOf): « Statistiques » for the Super admin view (the shop's numbers) and the
+  // Admin view (his team's: the same orders as his list, 27 Nov 2026); an agency's chiefs not yet (their agency's numbers
+  // need their own counts on the server)
+  const view = useConfView();
+  const manager = view !== 'agent' && !session?.profile.agencyId;
   const c = counts.data;
   // the menu's tabs; « Terminées » only while on it (reached from the numbers); « Réglages » apart at the end, with a gear
   const items = MENU_TABS.confirmation.filter((k) => k !== 'reglages' && (k !== 'terminees' || sub === 'terminees') && tabOn('confirmation', k)).map((k) => ({ key: k, label: t(menuTabName('confirmation', k)), href: `#/confirmation/${k}`, count: c?.[k as Sub] }));
   // (the gear only for who has something to change there: an administrator, a person allowed to share the orders, or the
   // store's own managers and owners (« Bloquer jusqu'à l'appel »; not a confirmation agency's people))
-  const mine = !!session?.isAdmin || !!session?.profile.canAffect || (manager && !session?.profile.agencyId);
+  const mine = !!session?.isAdmin || !!session?.profile.canAffect || manager;
   const cfg = tabOn('confirmation', 'reglages') && mine ? { key: 'reglages', label: t(menuTabName('confirmation', 'reglages')), href: '#/confirmation/reglages' } : null;
   const focusId = rest?.[0] ? Number(rest[0]) : null;
   // phones: the queue comes first; the big statistics stay on tablets and computers
@@ -501,7 +505,8 @@ export function Queue({
         // the try, then what happens next (« Rappel 18:00 », « Occupé »: actions, not statuses — 25 Nov 2026)
         return (
           <span className="cftries">
-            <TryDots made={r.attempts} max={list.data?.tries ?? 3} />
+            {/* (each row: its own shop's number, « Tous les vendeurs » and « Toutes les boutiques » mix shops) */}
+            <TryDots made={r.attempts} max={r.tries ?? list.data?.tries ?? 3} />
             <NextAction status={r.confStatus} nextCallAt={r.nextCallAt} lastBusy={r.lastBusy} />
           </span>
         );

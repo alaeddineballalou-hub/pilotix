@@ -165,7 +165,9 @@ test('statistics overview: managers only, every lead counted once, Leads quality
 
 test('statistics overview: a refusal is counted with its reason; « annulée automatiquement » is an attack', async () => {
   const admin = await as(EMAILS.admin);
-  const mgr = await as(EMAILS.manager);
+  // the shop's numbers (the Super admin view): an agent manager counts only his list's orders since 27 Nov 2026 — his
+  // team's and the free ones — and the three free orders the administrator works here leave it (they become his)
+  const mgr = admin;
   const two = await db.query(`SELECT id, created_at FROM orders WHERE conf_status = 'new' AND agent_id IS NULL AND follow_status IS NULL AND NOT is_exchange ORDER BY id DESC LIMIT 3`);
   assert.equal(two.length, 3);
   const day = (t: unknown) => new Date(Date.parse(String(t instanceof Date ? t.toISOString() : t)) + 3_600_000).toISOString().slice(0, 10);

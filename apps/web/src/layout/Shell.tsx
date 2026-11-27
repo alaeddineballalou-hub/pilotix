@@ -7,9 +7,9 @@ import { compact, when } from '../lib/format';
 import { applyLanguage } from '../lib/i18n';
 import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc, useRpcFor } from '../lib/query';
-import { Seller, setSeller, useSeller } from '../lib/seller';
+import { Seller, SellerScope, setSeller, useSeller } from '../lib/seller';
 import { ownerGroups, useSellers } from '../lib/sellers';
-import { useSeesAll, useSession } from '../lib/session';
+import { confViewOf, useSeesAll, useSession } from '../lib/session';
 import { PxLogo } from './PxLogo';
 import { PxMenuFace } from './PxMenuFace';
 import { chime, unlockAudio } from '../lib/sound';
@@ -467,9 +467,19 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
           />
         </header>
         <ShopBanner session={session!} />
-        {has('confirmation') && !isAdmin && (
+        {/* the red « Appels en retard » banner: Confirmation's Agent view only (owner's choice, 27 Nov 2026) — a store's
+            agent or community manager, and an agency's agent (his sellers' orders: the seller picked at the top, or all
+            of them); never the Super admin and Admin views (the owner, the administrators, the managers, an agency's
+            chiefs) */}
+        {(space === 'store' || agency) && hasRole('confirmation') && confViewOf(session) === 'agent' && (
           <Suspense fallback={null}>
-            <AgentBanner />
+            {agency ? (
+              <SellerScope seller={seller} ambient={false}>
+                <AgentBanner />
+              </SellerScope>
+            ) : (
+              <AgentBanner />
+            )}
           </Suspense>
         )}
         {/* a store's plain confirmation agent (never a manager, the owner, an administrator nor a community manager
