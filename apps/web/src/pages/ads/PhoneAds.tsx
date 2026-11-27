@@ -569,6 +569,8 @@ function ProdCard({ p, onOpen }: { p: Prod; onOpen: () => void }) {
           <b className="ltr">
             {n(p.money.d)} / {n(p.money.c)}
           </b>
+          {/* confirmed, still to deliver: no cancelled order, no return */}
+          {!!p.money.run && <small className="pxm-run">{t('mkph.runN', { count: p.money.run })}</small>}
         </span>
         <span>
           <small>{t('mkph.cpdShort')}</small>

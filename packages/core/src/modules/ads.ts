@@ -303,6 +303,8 @@ export interface Money {
   d: number; // delivered
   r: number; // returned
   enRoute: number; // still on the road (not counted yet)
+  /** « En cours »: confirmed and not finished yet — in the depot or on the road, never a cancelled order nor a return */
+  run?: number;
   x?: number; // cancelled (by the customer or as fake / wrong number)
   /** parcels their company gave to another customer (swap): their swap fee is in `ret`, like a return fee */
   sw?: number;
@@ -317,19 +319,25 @@ export interface Money {
   net: number;
 }
 
+/** A confirmed order with one of these delivery statuses is no longer « En cours » (delivered, back, on its way back, cancelled). */
+const RUN_DONE = ['delivered', 'exchanged', 'returned', 'lost', 'cancelled', 'returning'];
+
 /** An order the team confirmed (confirmed, or confirmed waiting for stock): what the ads count. A row of MONEY_COLS. */
 export const confirmedOrder = (o: { conf_status: unknown; conf_note?: string | null }) => leadOf(String(o.conf_status), o.conf_note ?? null) === 'confirmed';
 
 /** Profit of a set of orders, line by line (the original "Bénéfice réel · ligne par ligne"). share = fraction counted (marketer share). */
 export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1): Promise<Money> {
   const plans = await getSetting(db, 'payPlans');
-  let n = 0, cart = 0, c = 0, ref = 0, att = 0, d = 0, r = 0, x = 0, sw = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
+  let n = 0, cart = 0, run = 0, c = 0, ref = 0, att = 0, d = 0, r = 0, x = 0, sw = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
   for (const o of orders) {
     n++;
     if (o.is_cart === true) cart++;
     // what became of the lead (Confirmation › Statistiques' own rule): confirmed, refused by a real client, an attack
     const lead = leadOf(String(o.conf_status), o.conf_note ?? null);
     if (lead === 'confirmed') c++;
+    // « En cours » (the owner, 27 Nov 2026: « to know how much is still delivering »): confirmed, not delivered yet,
+    // not cancelled, not on its way back
+    if (lead === 'confirmed' && !RUN_DONE.includes(String(o.follow_status ?? ''))) run++;
     else if (lead === 'refused') ref++;
     else if (lead === 'attack') att++;
     const fs = o.follow_status as string | null;
@@ -353,7 +361,7 @@ export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1):
     } else if (fs && ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning'].includes(fs)) enRoute++;
   }
   const k = (v: number) => Math.round(v * share);
-  const m = { n: k(n), cart: k(cart), c: k(c), ref: k(ref), att: k(att), d: k(d), r: k(r), x: k(x), sw: k(sw), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
+  const m = { n: k(n), cart: k(cart), run: k(run), c: k(c), ref: k(ref), att: k(att), d: k(d), r: k(r), x: k(x), sw: k(sw), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
   const avant = m.rev - m.achat - m.liv - m.conf - m.ret;
   const pub = Math.round(pubDzd);
   return { ...m, avant, pub, net: avant - pub };
@@ -634,9 +642,9 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   const money: Money = [...tot, ...groupRows].reduce(
     (s, p) => {
       const m = p.money;
-      return { n: s.n + m.n, cart: (s.cart ?? 0) + (m.cart ?? 0), c: s.c + m.c, ref: s.ref + m.ref, att: s.att + m.att, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), sw: (s.sw ?? 0) + (m.sw ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
+      return { n: s.n + m.n, cart: (s.cart ?? 0) + (m.cart ?? 0), run: (s.run ?? 0) + (m.run ?? 0), c: s.c + m.c, ref: s.ref + m.ref, att: s.att + m.att, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), sw: (s.sw ?? 0) + (m.sw ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
     },
-    { n: 0, cart: 0, c: 0, ref: 0, att: 0, d: 0, r: 0, x: 0, sw: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
+    { n: 0, cart: 0, run: 0, c: 0, ref: 0, att: 0, d: 0, r: 0, x: 0, sw: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
   );
   // spend of unlinked ad sets still counts as ads spend for the shop total (a group's ad sets are the group's)
   const unlinked = inPeriod.filter((r) => {

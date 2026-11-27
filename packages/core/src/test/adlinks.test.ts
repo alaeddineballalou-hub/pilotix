@@ -196,3 +196,38 @@ test('Marketer: an ad set selling two products counts each ad’s purchases for 
   assert.ok(Math.abs(m1.n - 1) < 1e-9, `M1: ${m1.n}`);
   assert.ok(Math.abs(m2.n - 1) < 1e-9, `M2: ${m2.n}`);
 });
+
+test('« En cours »: the confirmed orders still to deliver, never a cancelled one nor a return', async () => {
+  const pou = await pid('PX-POU');
+  const today = new Date(Date.now() + 3_600_000).toISOString().slice(0, 10);
+  const from = new Date(Date.now() + 3_600_000 - 30 * 86_400_000).toISOString().slice(0, 10);
+  const range = [new Date(Date.parse(from + 'T00:00:00Z') - 3_600_000).toISOString(), new Date(Date.parse(today + 'T00:00:00Z') + 86_400_000 - 3_600_000).toISOString()];
+  const count = async () =>
+    Number(
+      (
+        await db.query(
+          `WITH firsts AS (SELECT DISTINCT ON (i.order_id) i.order_id, i.product_id FROM order_items i ORDER BY i.order_id, i.is_upsell, i.id)
+           SELECT count(*)::int AS n FROM sales o JOIN firsts f ON f.order_id = o.id
+            WHERE f.product_id = $1 AND o.created_at >= $2 AND o.created_at < $3 AND o.conf_status IN ('confirmed', 'no_stock')
+              AND COALESCE(o.follow_status, '') NOT IN ('delivered', 'exchanged', 'returned', 'lost', 'cancelled', 'returning')`,
+          [pou, ...range],
+        )
+      )[0].n,
+    );
+  const row = async () => ((await call('ads.overview', owner, { from, to: today })) as any).products.find((x: any) => x.productId === pou);
+  const before = await count();
+  assert.ok(before > 0, 'the demo has strollers still on their way');
+  assert.equal((await row()).money.run, before);
+  // one of them cancelled at the door: it leaves « En cours »
+  await db.query(
+    `UPDATE orders SET follow_status = 'cancelled' WHERE id = (
+       SELECT o.id FROM sales o WHERE o.conf_status = 'confirmed' AND COALESCE(o.follow_status, '') NOT IN ('delivered', 'exchanged', 'returned', 'lost', 'cancelled', 'returning')
+          AND o.created_at >= $2 AND o.created_at < $3
+          AND (SELECT i.product_id FROM order_items i WHERE i.order_id = o.id ORDER BY i.is_upsell, i.id LIMIT 1) = $1
+        ORDER BY o.id LIMIT 1)`,
+    [pou, ...range],
+  );
+  const r = await row();
+  assert.equal(r.money.run, before - 1);
+  assert.ok(r.money.run <= r.money.c - r.money.d, 'never more than the confirmed not delivered');
+});

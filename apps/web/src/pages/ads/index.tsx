@@ -248,6 +248,9 @@ export function Publicite(_: Partial<PageProps> = {}) {
                         <th className="num">{t('ads.colLeads')}</th>
                         <th className="num">{t('ads.colConfirmed')}</th>
                         <th className="num">{t('ads.colDelivered')}</th>
+                        <th className="num" title={t('ads.colRunTip')}>
+                          {t('ads.colRun')}
+                        </th>
                         <th className="num">{t('ads.colRate')}</th>
                         <th className="num">{t('ads.colCpl')}</th>
                         <th className="num">{t('ads.colCpc')}</th>
@@ -277,6 +280,10 @@ export function Publicite(_: Partial<PageProps> = {}) {
                           </td>
                           <td className="num" data-l={t('ads.colDelivered')}>
                             {n(p.money.d)}
+                          </td>
+                          {/* confirmed, still to deliver (in the depot or on the road): no cancelled order, no return */}
+                          <td className="num" data-l={t('ads.colRun')}>
+                            {n(p.money.run ?? 0)}
                           </td>
                           <td className="num" data-l={t('ads.colRate')}>
                             {pct(p.money.c ? p.money.d / p.money.c : null)}

@@ -104,6 +104,8 @@
   "leadsN_one": "{{count}} lead",
   "leadsN_other": "{{count}} leads",
   "cplShort": "{{v}} DA / lead",
+  "runN_one": "{{count}} en cours",
+  "runN_other": "{{count}} en cours",
   "net": "Net DA",
   "products": "Produits · {{n}} — un tap ouvre le produit",
   "adsets": "Ad sets · {{n}}",

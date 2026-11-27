@@ -104,6 +104,8 @@
   "leadsN_one": "{{count}} lead",
   "leadsN_other": "{{count}} leads",
   "cplShort": "{{v}} DA / lead",
+  "runN_one": "{{count}} in delivery",
+  "runN_other": "{{count}} in delivery",
   "net": "Net DA",
   "products": "Products · {{n}} — tap to open",
   "adsets": "Ad sets · {{n}}",
