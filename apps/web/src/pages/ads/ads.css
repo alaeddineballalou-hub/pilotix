@@ -20,7 +20,7 @@
 /* Ad sets › Produit: linked by Pilotix from the ad's landing page */
 #ads .chip.cp.ad-auto { display: inline-flex; align-items: center; gap: 4px; }
 #ads .chip.cp.ad-auto .bji { width: 12px; height: 12px; }
-#ads .ad-autonote { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+#ads .ad-autonote { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 
 /* Referral › Code promo: « 🎁 Awareness » on an ad */
 .ad-aware { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 8px; padding: 2px 8px; border: 1px dashed #d0d7e2; border-radius: 999px; font-size: 12px; cursor: pointer; white-space: nowrap; }
