@@ -321,9 +321,9 @@ function NvTeams({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
               return (
                 <tr key={r.key} className={open ? 'go' : undefined} onClick={open ? () => onTeam(r.key) : undefined}>
                   <td data-l={t('confirmation.nv.cTeam')}>
-                    {r.name} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
+                    {r.kind === 'none' ? t('confirmation.cfs.noTeam') : r.name} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
                   </td>
-                  {cells(r, true, r.agents ? Math.round(r.received / r.agents) : null)}
+                  {cells(r, r.kind !== 'none', r.agents ? Math.round(r.received / r.agents) : null)}
                   <td className="go" aria-hidden="true">{open ? '›' : ''}</td>
                 </tr>
               );
@@ -560,9 +560,9 @@ function EcTeams({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
               return (
                 <tr key={r.key} className={go ? 'go' : undefined} onClick={go ? () => onTeam(r.key) : undefined}>
                   <td data-l={t('confirmation.nv.cTeam')}>
-                    {r.name} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
+                    {r.kind === 'none' ? t('confirmation.cfs.noTeam') : r.name} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
                   </td>
-                  {cells(r, true, r.agents ? Math.round(r.inProgress / r.agents) : null)}
+                  {cells(r, r.kind !== 'none', r.agents ? Math.round(r.inProgress / r.agents) : null)}
                   <td className="go" aria-hidden="true">{go ? '›' : ''}</td>
                 </tr>
               );
@@ -1440,7 +1440,7 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
   const tq = cfQual(S);
   const tu = cfUp(S);
   const tl = cfLivr(S);
-  const cells = (r: CfS & { agents?: number | null }, judge: boolean) => {
+  const cells = (r: CfS & { agents?: number | null }, judge: boolean, per: number | null = r.agents ? Math.round(r.leads / r.agents) : null) => {
     const q = cfQual(r);
     const u = cfUp(r);
     const l = cfLivr(r);
@@ -1454,7 +1454,7 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
           ]
         : []),
       <td key="n" className="num ltr" data-l={head('cLeads')}>{n(r.leads)}</td>,
-      ...(dir ? [<td key="p" className="num ltr" data-l={head('cPerAgent')}>{r.agents ? n(Math.round(r.leads / r.agents)) : '—'}</td>] : []),
+      ...(dir ? [<td key="p" className="num ltr" data-l={head('cPerAgent')}>{per === null ? '—' : n(per)}</td>] : []),
       <td key="q" className="num ltr" data-l={head('cQualified')}>{n(r.qualified)}</td>,
       <td key="c" className="num ltr" data-l={head('cConfirmed')}>{n(r.confirmed)}</td>,
       <td key="lq" className={`num ltr${bad(q !== null && tq !== null && q <= tq - 5)}`} data-l={head('cQuality')}>{pctTxt(q)}</td>,
@@ -1522,7 +1522,7 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
             {D.table.length > 1 && (
               <tr className="tot">
                 <td data-l={first}>{total}</td>
-                {cells({ ...S, agents: D.perAgent?.agents }, false)}
+                {cells({ ...S, agents: D.perAgent?.agents }, false, D.perAgent && D.perAgent.agents > 0 ? Math.round(D.perAgent.leads / D.perAgent.agents) : null)}
                 {dir && <td aria-hidden="true" />}
               </tr>
             )}

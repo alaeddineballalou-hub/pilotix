@@ -547,7 +547,8 @@ export interface NvAgent extends Omit<NvSum, 'received'> {
 }
 export interface NvTeam extends NvSum {
   key: string;
-  kind: 'team' | 'agency';
+  /** 'none': what no team has (orders with no agent yet, people in no team) */
+  kind: 'team' | 'agency' | 'none';
   name: string;
   /** agents who made a first call today (null: an agency — its agents stay private) */
   agents: number | null;
@@ -706,6 +707,16 @@ async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
         return { row, cs };
       }),
     ].filter((x) => x.row.kind === 'team' || x.row.received || x.row.called);
+    // what no team has: the orders no agent has yet, the people in no team — one line, so the lines add up to the cards
+    const inTeams = new Set<number>(T.flatMap((t) => [...membersOf(t)]));
+    const restCs = made.filter((c) => inW(W0, c.at) && c.agencyId === null && !inTeams.has(c.by));
+    const restRec = newIn(W0, (o) => o.agencyId === null && (o.agentId === null || !inTeams.has(o.agentId)));
+    const restWait = waiting.filter((w) => w.agencyId === null && (w.agentId === null || !inTeams.has(w.agentId)));
+    if (restCs.length || restRec || restWait.length)
+      built.push({
+        row: { key: 'none', kind: 'none', name: '', ...sumOf(restCs, restRec), agents: [...own].filter((x) => !inTeams.has(x)).length, late: restWait.filter((w) => w.late).length, unassigned: restWait.filter((w) => w.agentId === null).length },
+        cs: restCs,
+      });
     teams = built.map((x) => x.row);
     // « Toutes les équipes »: the lines above added up (every call once), never an average of the teams
     const union = [...new Set(built.flatMap((x) => x.cs))];
@@ -777,7 +788,8 @@ export interface EcAgent extends EcSum {
 }
 export interface EcTeam extends EcSum {
   key: string;
-  kind: 'team' | 'agency';
+  /** 'none': what no team has (orders with no agent, people in no team) */
+  kind: 'team' | 'agency' | 'none';
   name: string;
   /** agents who made a call today (null: an agency — its agents stay private) */
   agents: number | null;
@@ -951,6 +963,19 @@ async function enCoursStats(ctx: Ctx, i: { team?: string } = {}) {
         late: rows.filter((o) => o.late && o.agencyId === a.id).length,
       })),
     ].filter((x) => x.kind === 'team' || x.inProgress || x.calls || x.confirmed + x.saidNo + x.never);
+    // what no team has: orders with no agent, people in no team — one line, so the lines add up to the cards
+    const inTeams = new Set<number>(T.flatMap((t) => [...membersOf(t)]));
+    const out = (aid: number | null) => aid === null || !inTeams.has(aid);
+    const rest: EcTeam = {
+      key: 'none',
+      kind: 'none',
+      name: '',
+      ...sumOf(ownB.filter((b) => !inTeams.has(b.by)), closes.filter((c) => inW(W0, c.at) && c.agencyId === null && out(c.agentId))),
+      agents: [...active].filter((x) => !inTeams.has(x)).length,
+      inProgress: rows.filter((o) => o.agencyId === null && out(o.agentId)).length,
+      late: rows.filter((o) => o.late && o.agencyId === null && out(o.agentId)).length,
+    };
+    if (rest.inProgress || rest.calls || rest.confirmed + rest.saidNo + rest.never) teams.push(rest);
     // « Toutes les équipes »: the lines above added up, never an average of the teams
     const add = (k: keyof EcSum | 'inProgress' | 'late') => teams!.reduce((s, r) => s + r[k], 0);
     allTeams = {

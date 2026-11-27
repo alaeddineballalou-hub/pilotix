@@ -69,6 +69,11 @@ test('Nouvelles › Statistiques: today only, the team adds up its agents, a man
   // « Toutes les équipes » adds the lines up; a store team has no « Non assignées » of its own
   assert.equal(owner.allTeams.called, owner.teams.reduce((n: number, r: any) => n + r.called, 0));
   assert.equal(owner.allTeams.received, owner.teams.reduce((n: number, r: any) => n + r.received, 0));
+  // with « Sans équipe », the lines add up to the cards
+  assert.equal(owner.allTeams.received, owner.today.received, 'Nouvelles: the teams add up to the new orders');
+  assert.equal(owner.allTeams.called, owner.today.called, 'Nouvelles: the teams add up to the first calls');
+  assert.equal(owner.allTeams.late, owner.live.late);
+  assert.equal(owner.allTeams.unassigned, owner.live.noAgent);
   for (const r of owner.teams) if (r.kind === 'team') assert.equal(r.unassigned, null);
   // a team opened by the owner: its manager view (no team table), never more than all the teams
   const first = owner.teams.find((r: any) => r.kind === 'team');
@@ -108,6 +113,10 @@ test('En cours › Statistiques: today only, the closed orders add up, a manager
       for (const r of s.teams) if (r.kind === 'agency') assert.equal(r.agents, null, "an agency's agents stay private");
       assert.equal(s.allTeams.calls, s.teams.reduce((n: number, r: any) => n + r.calls, 0));
       assert.equal(s.allTeams.inProgress, s.teams.reduce((n: number, r: any) => n + r.inProgress, 0));
+      // with « Sans équipe », the lines add up to the cards
+      assert.equal(s.allTeams.inProgress, s.live.inProgress, 'En cours: the teams add up to the orders in progress');
+      assert.equal(s.allTeams.calls, s.today.calls, 'En cours: the teams add up to the calls');
+      assert.equal(s.allTeams.late, s.live.late);
       const first = s.teams.find((r: any) => r.kind === 'team');
       if (first) {
         const one: any = await call('confirmation.enCours', await at(EMAILS.vendeur, now), { team: first.key });
