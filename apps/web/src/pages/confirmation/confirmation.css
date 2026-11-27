@@ -50,12 +50,12 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 [dir="rtl"] .px-dr-d.st:not(.en) { background: linear-gradient(to left, transparent 50%, var(--px-dr-band) 50%); }
 [dir="rtl"] .px-dr-d.en:not(.st) { background: linear-gradient(to right, transparent 50%, var(--px-dr-band) 50%); }
 .px-dr-d.st span, .px-dr-d.en span { background: var(--c-accent-grad) !important; color: var(--c-on-accent); box-shadow: none; }
-.px-dr-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.px-dr-sum { margin-inline-end: auto; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ink); }
+.px-dr-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.px-dr-sum { flex: 1 0 100%; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ink); }
 @media (max-width: 760px) {
   .px-dr-veil { background: rgba(11, 18, 32, .35); }
   .px-dr-pop { position: fixed; top: auto; bottom: 12px; inset-inline: 12px; flex-direction: column; width: auto; }
-  .px-dr-presets { flex-direction: row; min-width: 0; padding: 10px; overflow-x: auto; border-inline-end: 0; border-bottom: 1px solid var(--line); }
+  .px-dr-presets { flex-direction: row; flex-wrap: wrap; min-width: 0; padding: 10px; border-inline-end: 0; border-bottom: 1px solid var(--line); }
   .px-dr-presets button { white-space: nowrap; }
   .px-dr-cal { width: auto; }
 }
@@ -238,14 +238,14 @@ html[data-theme="dark"] .px-sx-tile.main .lb .px-help { background: rgba(15, 26,
 .px-sx-fb .px-sx-seg button { padding: 0 14px; }
 .px-sx-seg button.on { background: var(--navy); color: var(--on-navy); }
 .px-sx-sec .px-sx-seg button { padding: 3px 11px; font-size: 12.5px; }
-select.px-sx-pill { width: auto !important; max-width: 210px !important; height: 36px !important; min-height: 36px !important; padding: 0 32px 0 14px !important; border: 1px solid var(--line); border-radius: 999px !important; background-color: var(--surface); color: var(--ink); font-size: 13px !important; font-weight: 500; }
+select.px-sx-pill { width: auto !important; max-width: 176px !important; height: 36px !important; min-height: 36px !important; padding: 0 32px 0 14px !important; border: 1px solid var(--line); border-radius: 999px !important; background-color: var(--surface); color: var(--ink); font-size: 13px !important; font-weight: 500; }
 /* the dates: one pill for the period, one « Personnalisé »; the calendar opens from their left edge, inside the card */
 .px-sx-fb .px-dr { display: inline-flex; gap: 8px; }
 .px-sx-fb .px-dr-btn { height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; }
 .px-dr-custom { height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 .px-dr-custom:hover { border-color: var(--navy); }
 .px-dr-custom.on { border-color: var(--navy); background: var(--navy); color: var(--on-navy); }
-.px-sx-fb .px-dr-pop { inset-inline-start: 0; inset-inline-end: auto; }
+@media (min-width: 761px) { .px-sx-fb .px-dr-pop { inset-inline-start: 0; inset-inline-end: auto; } }
 select.px-sx-pill.ag { border-color: #F3DDB0; background-color: var(--butter); color: var(--warn); }
 .px-sx-t6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .px-sx-rs { display: grid; gap: 7px; }
@@ -255,6 +255,8 @@ html[data-theme="dark"] .px-sx-rs-row .bk { background: var(--line); }
 .px-sx-rs-row .bk div { height: 100%; border-radius: 5px; background: #E58A80; }
 .px-sx-rs-row .pc { color: var(--muted); text-align: end; }
 .px-sx-tbl th .px-help { width: 15px; height: 15px; margin-inline-start: 4px; }
+/* a line's name on one line (computer, tablet): the table scrolls sideways instead of a name on four lines */
+@media (min-width: 761px) { .px-sx-tbl td:first-child { white-space: nowrap; } }
 @media (max-width: 760px) {
   .px-sx { padding: 0 12px 12px; }
   .px-sx-t3, .px-sx-t4 { grid-template-columns: 1fr 1fr; }
