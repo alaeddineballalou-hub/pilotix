@@ -2,7 +2,7 @@ import { DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, payPeriodAt, PayTask } f
 import type { Db } from '../db';
 import { num } from '../db';
 import { setRaw } from '../modules/admin';
-import { payLedger, PAY_ACOMPTE_KEY, PAY_CALENDAR_KEY, recordPayment } from '../modules/pay';
+import { payCalendarOf, payLedger, PAY_ACOMPTE_KEY, PAY_CALENDAR_KEY, recordPayment, takeBackDelivery } from '../modules/pay';
 
 const H = 3_600_000;
 
@@ -84,4 +84,35 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   const ran = await payLedger(db, users.conf2, now);
   const b = Math.min(1500, Math.floor((ran.open.earned * 0.5) / 100) * 100);
   if (b >= 500) await db.query(`INSERT INTO pay_requests (profile_id, amount, note, asked_at) VALUES ($1,$2,$3,$4)`, [users.conf2, b, 'Facture d’électricité', new Date(Math.max(open.from + H, now - 3 * H)).toISOString()]);
+}
+
+/**
+ * The full demo: a delivery Samira was paid for (the period before last) that its company corrected this morning
+ * (« Livré » → « Retour vers vendeur »): her next pay takes it back — the red minus line in Ma caisse (the owner, 27 Nov
+ * 2026: « Take it from next pay »). Last of the demo: nothing above reads it.
+ */
+export async function seedPayTakeback(db: Db, users: Record<string, number>, now: number): Promise<void> {
+  const cal = await payCalendarOf(db);
+  const open = payPeriodAt(cal, now);
+  const last = payPeriodAt(cal, open.from - 1);
+  const before = payPeriodAt(cal, last.from - 1);
+  const o = (
+    await db.query(
+      `SELECT o.id, c.name FROM sales o JOIN delivery_companies c ON c.id = o.company_id
+        WHERE o.agent_id = $1 AND o.follow_status = 'delivered' AND NOT o.cashed AND c.kind <> 'own'
+          AND o.delivered_at >= $2 AND o.delivered_at < $3 ORDER BY o.delivered_at DESC LIMIT 1`,
+      [users.conf1, new Date(before.from).toISOString(), new Date(last.from).toISOString()],
+    )
+  )[0];
+  if (!o) return;
+  const at = new Date(Math.max(open.from + H, now - 5 * H)).toISOString();
+  await takeBackDelivery(db, num(o.id), at);
+  await db.query(`UPDATE orders SET follow_status = 'returning', returning_at = $2, ext_status = 'Retour vers vendeur', ext_status_at = $2, updated_at = $2, version = version + 1 WHERE id = $1`, [o.id, at]);
+  await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, data, at) VALUES ($1, NULL, 'follow_status', 'delivered', 'returning', $2, $3, $4)`, [
+    o.id,
+    `Statut ${o.name} : Retour vers vendeur`,
+    JSON.stringify({ courier: true }),
+    at,
+  ]);
+  await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, at) VALUES ($1, NULL, 'note', NULL, 'event', $2, $3)`, [o.id, `Correction de ${o.name} : « Livrée » → « Retour en cours »`, at]);
 }

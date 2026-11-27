@@ -78,6 +78,9 @@ html[data-theme="dark"] .pp-confirm:not(.bad) { background: #2E2615; box-shadow:
 .pp-ref { margin-left: 6px; }
 [dir="rtl"] .pp-ref { margin-left: 0; margin-right: 6px; }
 .pp-up { font-style: normal; color: var(--c-ok-ink, #137A3B); font-weight: 600; }
+/* a delivery already paid that stopped being « Livrée »: taken back from this pay */
+.pp-down { font-style: normal; color: var(--c-bad-ink); font-weight: 600; }
+.pp-amt.minus { color: var(--c-bad-ink); }
 .pp-step { flex: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .pp-amtc { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .pp-amt { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700 !important; }

@@ -146,6 +146,7 @@ export function Summary({ d }: { d: PayMine }) {
         <b className="ltr">{da(d.open.earned)}</b>
         <small>
           {t('paie.earnedSub', { count: d.open.orders, upsells: d.open.upsells })}
+          {d.open.back > 0 ? ` · ${t('paie.minusBack', { v: da(d.open.back) })}` : ''}
           {d.open.acomptes > 0 ? ` · ${t('paie.minusAcompte', { v: da(d.open.acomptes) })}` : ''} · {t('paie.payDay', { d: payDay(d.open.to) })}
         </small>
       </div>
@@ -224,13 +225,20 @@ export function Orders({ d }: { d: PayMine }) {
       ) : (
         <ul className="pp-rows">
           {shown.map((r, i) => (
-            <li key={`${r.task}-${r.orderId ?? 'm'}-${r.event}-${i}`}>
+            <li key={`${r.kind}-${r.task}-${r.orderId ?? 'm'}-${r.event}-${i}`} className={r.kind === 'correction' ? 'pp-back' : undefined}>
               <div className="pp-grow">
                 <b>
                   {r.kind === 'salary' ? t('paie.orders.salary') : r.product || r.ref}
-                  {r.kind === 'order' && <span className="pp-muted ltr pp-ref">{r.ref}</span>}
+                  {r.kind !== 'salary' && <span className="pp-muted ltr pp-ref">{r.ref}</span>}
                 </b>
                 <small>
+                  {/* a delivery already paid that stopped being « Livrée »: taken back from this pay */}
+                  {r.kind === 'correction' && (
+                    <>
+                      <em className="pp-down">{t('paie.orders.backTag')}</em> · {t('paie.orders.back', { d: when(r.at), was: when(r.was) })}
+                      {r.agent ? ` · ${t('paie.orders.team', { name: r.agent })}` : ''}
+                    </>
+                  )}
                   {r.kind === 'order' && (
                     <>
                       <span className="ltr">
@@ -245,9 +253,9 @@ export function Orders({ d }: { d: PayMine }) {
                   {r.kind === 'salary' && r.plan}
                 </small>
               </div>
-              {r.step !== null && steps.get(r.task)?.[r.step] && <span className="pp-step">{steps.get(r.task)![r.step]}</span>}
+              {r.kind === 'order' && r.step !== null && steps.get(r.task)?.[r.step] && <span className="pp-step">{steps.get(r.task)![r.step]}</span>}
               <span className="pp-amtc">
-                <b className="ltr pp-amt">+{da(r.amount)}</b>
+                {r.amount < 0 ? <b className="ltr pp-amt minus">−{da(-r.amount)}</b> : <b className="ltr pp-amt">+{da(r.amount)}</b>}
                 {r.upsell > 0 && (
                   <small className="ltr">
                     {da(r.base)} + {da(r.upsell)}

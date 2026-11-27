@@ -190,7 +190,8 @@ function upsellFee(p: ManagementPlanConfig, fee: number, price: number, extra: n
 }
 
 export interface PayRow {
-  kind: 'order' | 'salary';
+  /** correction: a delivery already paid that stopped being « Livrée » (a minus line, `at` = when it stopped) */
+  kind: 'order' | 'salary' | 'correction';
   task: PayTask;
   orderId: number | null;
   ref: string | null;
@@ -211,6 +212,8 @@ export interface PayRow {
   /** a team leader's row: the agent who confirmed it */
   agent: string | null;
   plan: string;
+  /** a correction: when it had been delivered (the delivery paid then, taken back) */
+  was?: string;
 }
 
 const ITEMS = `(SELECT jsonb_agg(jsonb_build_object('p', i.product_id, 'v', i.variant_id, 'q', i.qty, 'u', i.unit_price, 'n', p.name) ORDER BY i.id)
@@ -227,14 +230,39 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
   const names = new Map<number, string>((await db.query('SELECT id, name FROM profiles')).map((r: any) => [num(r.id), String(r.name)]));
   const rows: PayRow[] = [];
   let store: string | null = null;
-  const push = (task: PayTask, term: PayTerm, o: any, event: PayRow['event'], at: string, withBase: boolean, withUpsell: boolean, agentRaw: string | null) => {
+  const make = (task: PayTask, term: PayTerm, o: any, event: PayRow['event'], at: string, withBase: boolean, withUpsell: boolean, agentRaw: string | null): PayRow | null => {
     const agent = agentRaw ?? store;
     const s = payOrderShape(o.items, o.orig_items, services);
     const { fee, step } = planFee(term.config!, s.price);
     const base = withBase ? fee : 0;
     const up = withUpsell && (task === 'confirmation' || task === 'superviseur') ? upsellFee(term.config!, fee, s.price, s.extra) : 0;
-    if (!base && !up && !(withBase && term.config!.method !== 'none')) return;
-    rows.push({ kind: 'order', task, orderId: num(o.id), ref: String(o.ref), product: s.name, price: s.price, qty: s.qty, ordered: s.ordered, extra: withUpsell ? s.extra : 0, at, event, step, base, upsell: up, amount: base + up, agent, plan: term.name });
+    if (!base && !up && !(withBase && term.config!.method !== 'none')) return null;
+    return { kind: 'order', task, orderId: num(o.id), ref: String(o.ref), product: s.name, price: s.price, qty: s.qty, ordered: s.ordered, extra: withUpsell ? s.extra : 0, at, event, step, base, upsell: up, amount: base + up, agent, plan: term.name };
+  };
+  const push = (...a: Parameters<typeof make>) => {
+    const r = make(...a);
+    if (r) rows.push(r);
+  };
+  // Deliveries taken back (pay_takebacks, written when an order stops being « Livrée »: migrations/141): a delivery
+  // this person was already paid for, by a pay made before it stopped, comes back as a minus line when it stopped (the
+  // owner, 27 Nov 2026: « Take it from next pay »). Not paid yet: nothing (the order just left the pay). Its pay
+  // cancelled since: nothing either (that period is paid again without it).
+  let pays: { from: number; to: number; at: number }[] | null = null;
+  const paidBefore = async (delivered: number, stopped: number) => {
+    pays ??= (await db.query(`SELECT period_from, period_to, paid_at FROM pay_payments WHERE profile_id = $1 AND kind = 'pay' AND status <> 'cancelled'`, [personId])).map((r: any) => ({
+      from: Date.parse(iso(r.period_from)),
+      to: Date.parse(iso(r.period_to)),
+      at: Date.parse(iso(r.paid_at)),
+    }));
+    return pays.some((p) => p.from <= delivered && delivered < p.to && p.at <= stopped);
+  };
+  const takeBack = async (task: PayTask, o: any, withUpsell: boolean, agent: string | null) => {
+    const was = iso(o.was);
+    const tm = termAt(terms, task, Date.parse(was));
+    if (!tm || (tm.config!.trigger !== 'delivered' && !withUpsell)) return;
+    const r = make(task, tm, o, 'delivered', was, tm.config!.trigger === 'delivered', withUpsell, agent);
+    if (!r || r.amount <= 0 || !(await paidBefore(Date.parse(was), Date.parse(iso(o.stopped_at))))) return;
+    rows.push({ ...r, kind: 'correction', at: iso(o.stopped_at), was, base: -r.base, upsell: -r.upsell, amount: -r.amount, extra: 0 });
   };
 
   // confirmation (his own orders) and team leader (his team's orders): at delivery, or at confirmation for such a plan
@@ -265,6 +293,14 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
         if (tm && tm.config!.trigger === 'confirmed') push(task, tm, o, 'confirmed', iso(o.confirmed_at), true, false, agent);
       }
     }
+    // (its delivery paid the confirmation, or only the upsell for a plan paid at confirmation)
+    const back = await src.db.query(
+      `SELECT m.delivered_at AS was, m.at AS stopped_at, o.id, o.ref, o.agent_id, o.orig_items, ${ITEMS}
+         FROM pay_takebacks m JOIN sales o ON o.id = m.order_id
+        WHERE o.agent_id = ANY($1) AND ($4::bigint IS NULL OR o.conf_agency_id = $4) AND m.at >= $2 AND m.at < $3`,
+      [who, F, T, src.agency],
+    );
+    for (const o of back) await takeBack(task, o, true, task === 'superviseur' ? (names.get(num(o.agent_id)) ?? null) : null);
   }
   // suivi: the parcels he followed that were delivered (no follow-up agent: whoever set « Livré »). A parcel that was an
   // alert (delivered from ALERT_PAY_FROM): paid only when a suivi agent sent its last alert back on the road with
@@ -284,6 +320,14 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
       const tm = termAt(terms, 'suivi', at);
       if (tm && tm.config!.trigger === 'delivered') push('suivi', tm, o, 'delivered', iso(o.delivered_at), true, false, null);
     }
+    // (the one its delivery paid, as said when it stopped: suivi_by)
+    const back = await src.db.query(
+      `SELECT m.delivered_at AS was, m.at AS stopped_at, o.id, o.ref, o.orig_items, ${ITEMS}
+         FROM pay_takebacks m JOIN sales o ON o.id = m.order_id
+        WHERE m.suivi_by = ANY($1) AND ($4::bigint IS NULL OR o.follow_agency_id = $4) AND m.at >= $2 AND m.at < $3`,
+      [src.ids, F, T, src.agency],
+    );
+    for (const o of back) await takeBack('suivi', o, false, null);
   }
   }
   store = null;
@@ -317,6 +361,20 @@ export async function payRows(db: Db, personId: number, terms: PayTerm[], from: 
     }
   }
   return rows.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** An order stops being « Livrée » (orders.setFollow, undo): its delivery is written in pay_takebacks for the pay above
+ *  (who was paid its suivi is said now, while its history still says it). Call it before the order changes. */
+export async function takeBackDelivery(db: Db, orderId: number, at?: string) {
+  await db.query(
+    `INSERT INTO pay_takebacks (order_id, delivered_at, suivi_by, at)
+     SELECT o.id, o.delivered_at,
+            CASE WHEN o.delivered_at >= $2::timestamptz AND ${hadAlertSql('o')} THEN ${relivreurSql('o')}
+                 ELSE coalesce(o.follow_agent_id, (SELECT e.user_id FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'delivered' ORDER BY e.at DESC LIMIT 1)) END,
+            coalesce($4::timestamptz, now())
+       FROM orders o WHERE o.id = $1 AND o.delivered_at IS NOT NULL AND o.follow_status = ANY($3)`,
+    [orderId, ALERT_PAY_FROM, PAID, at ?? null],
+  );
 }
 
 // ---------------------------------------------------------------- one person's money
@@ -362,11 +420,14 @@ async function paymentsOf(db: Db, personId: number, limit = 200): Promise<PayPay
 export interface PayPeriodSum {
   from: string;
   to: string;
+  /** what the period earned, minus the deliveries taken back (`back`) */
   earned: number;
   acomptes: number;
   net: number;
   orders: number;
   upsells: number;
+  /** deliveries paid before that stopped being « Livrée » in this period, taken back (a positive amount) */
+  back: number;
 }
 
 const sumRows = (rows: PayRow[], from: number, to: number) => {
@@ -374,7 +435,12 @@ const sumRows = (rows: PayRow[], from: number, to: number) => {
     const t = Date.parse(x.at);
     return t >= from && t < to;
   });
-  return { earned: r.reduce((s, x) => s + x.amount, 0), orders: r.filter((x) => x.kind === 'order').length, upsells: r.reduce((s, x) => s + x.extra, 0) };
+  return {
+    earned: r.reduce((s, x) => s + x.amount, 0),
+    orders: r.filter((x) => x.kind === 'order').length,
+    upsells: r.reduce((s, x) => s + x.extra, 0),
+    back: r.filter((x) => x.kind === 'correction').reduce((s, x) => s - x.amount, 0),
+  };
 };
 
 /** Where a person's money stands: ready (closed, not paid), the open period, what is coming, acomptes, payments. */
@@ -385,7 +451,7 @@ export async function payLedger(db: Db, personId: number, now: number) {
   const live = payments.filter((p) => p.status !== 'cancelled');
   const current = payPeriodAt(cal, now);
   if (!terms.length) {
-    return { cal, terms, start: null as string | null, paidUntil: null as string | null, ready: { periods: [] as PayPeriodSum[], total: 0 }, open: { from: new Date(current.from).toISOString(), to: new Date(current.to).toISOString(), earned: 0, acomptes: 0, net: 0, orders: 0, upsells: 0 }, owed: 0, rows: [] as PayRow[], payments };
+    return { cal, terms, start: null as string | null, paidUntil: null as string | null, ready: { periods: [] as PayPeriodSum[], total: 0 }, open: { from: new Date(current.from).toISOString(), to: new Date(current.to).toISOString(), earned: 0, acomptes: 0, net: 0, orders: 0, upsells: 0, back: 0 }, owed: 0, rows: [] as PayRow[], payments };
   }
   const start = Math.min(...terms.map((t) => t.at));
   const pays = live.filter((p) => p.kind === 'pay');
@@ -399,13 +465,13 @@ export async function payLedger(db: Db, personId: number, now: number) {
     if (p.to > now || from >= p.to) continue;
     const s = sumRows(rows, from, p.to);
     const a = acompteIn(from, p.to);
-    periods.push({ from: new Date(from).toISOString(), to: new Date(p.to).toISOString(), earned: s.earned, acomptes: a, net: s.earned - a, orders: s.orders, upsells: s.upsells });
+    periods.push({ from: new Date(from).toISOString(), to: new Date(p.to).toISOString(), earned: s.earned, acomptes: a, net: s.earned - a, orders: s.orders, upsells: s.upsells, back: s.back });
   }
   const readyTotal = periods.reduce((s, p) => s + p.net, 0);
   const oFrom = Math.max(current.from, paidUntil);
   const os = sumRows(rows, oFrom, current.to);
   const oa = acompteIn(oFrom, current.to);
-  const open = { from: new Date(oFrom).toISOString(), to: new Date(current.to).toISOString(), earned: os.earned, acomptes: oa, net: os.earned - oa + Math.min(0, readyTotal), orders: os.orders, upsells: os.upsells };
+  const open = { from: new Date(oFrom).toISOString(), to: new Date(current.to).toISOString(), earned: os.earned, acomptes: oa, net: os.earned - oa + Math.min(0, readyTotal), orders: os.orders, upsells: os.upsells, back: os.back };
   return {
     cal,
     terms,

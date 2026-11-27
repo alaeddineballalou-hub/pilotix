@@ -233,11 +233,16 @@ async function undoFollow(ctx: Ctx, o: any, act: Action) {
     const again = await lastAction(tx, num(o.id));
     if (!cur || cur.follow_status !== was || !again || again.main.id !== ev.id) throw bad('La commande a changé depuis : rechargez-la.');
     const f = (await tx.query('SELECT delivered_at = $2::timestamptz AS d, returned_at = $2::timestamptz AS r FROM orders WHERE id = $1', [o.id, at]))[0];
+    // the pay: a « Livrée » undone is a delivery taken back (nobody paid yet: nothing); a « pas livrée » undone gives
+    // back the line it wrote (the delivery counts as before)
+    const PAID = ['delivered', 'exchanged'];
+    if (PAID.includes(was) && !PAID.includes(back)) await (await import('./pay')).takeBackDelivery(tx, num(o.id));
+    if (!PAID.includes(was) && PAID.includes(back)) await tx.query('DELETE FROM pay_takebacks WHERE order_id = $1 AND at = $2::timestamptz', [o.id, at]);
     await tx.query(
       `UPDATE orders SET follow_status = $2,
          shipped_at = CASE WHEN shipped_at = $3::timestamptz THEN NULL ELSE shipped_at END,
          prepared_at = CASE WHEN prepared_at = $3::timestamptz THEN NULL ELSE prepared_at END,
-         delivered_at = CASE WHEN delivered_at = $3::timestamptz THEN NULL ELSE delivered_at END,
+         delivered_at = CASE WHEN delivered_at = $3::timestamptz THEN $11::timestamptz ELSE delivered_at END,
          returned_at = CASE WHEN returned_at = $3::timestamptz THEN NULL ELSE returned_at END,
          returning_at = CASE WHEN returning_at = $3::timestamptz THEN NULL ELSE returning_at END,
          delivery_attempts = GREATEST(0, delivery_attempts - CASE WHEN $4 = 'failed' THEN 1 ELSE 0 END),
@@ -247,7 +252,7 @@ async function undoFollow(ctx: Ctx, o: any, act: Action) {
          cancel_by_hand = CASE WHEN $5 THEN $9 WHEN $4 = 'cancelled' THEN false ELSE cancel_by_hand END,
          updated_at = now(), version = version + 1
        WHERE id = $1`,
-      [o.id, back, at, was, !!p, p?.sub ?? null, p?.fa ?? null, p?.lv ?? null, !!p?.cbh, ctx.session.profile.agencyId ?? null],
+      [o.id, back, at, was, !!p, p?.sub ?? null, p?.fa ?? null, p?.lv ?? null, !!p?.cbh, ctx.session.profile.agencyId ?? null, p?.da ?? null],
     );
     // a return the depot then put in the broken stock (« Cassé »): out of the broken stock first, as it came
     for (const m of await tx.query(`SELECT id, variant_id, warehouse_id, delta, broken_delta FROM stock_movements WHERE order_id = $1 AND reason = 'broken_return' AND created_at >= $2::timestamptz`, [o.id, at])) {
@@ -265,7 +270,8 @@ async function undoFollow(ctx: Ctx, o: any, act: Action) {
     // straight back to « En dispatch ». What was taken waits in the pool (used first by the next « J'ai pris »).
     if (was === 'prepared' && back === 'to_prepare') await releasePicked(tx, num(o.id));
     // the customer's numbers (counted once, when it first became so)
-    if (was === 'delivered' && f?.d) await tx.query('UPDATE customers SET delivered = GREATEST(0, delivered - 1) WHERE id = $1', [cur.customer_id]);
+    // (delivered again after a correction: it was counted at its first delivery, which stays)
+    if (was === 'delivered' && f?.d && !p?.da) await tx.query('UPDATE customers SET delivered = GREATEST(0, delivered - 1) WHERE id = $1', [cur.customer_id]);
     if (was === 'returned' && f?.r) await tx.query('UPDATE customers SET returned = GREATEST(0, returned - 1) WHERE id = $1', [cur.customer_id]);
     // the depot's red alert this change raised (a cancel): closed; its messages still waiting: not sent
     await tx.query('UPDATE depot_alerts SET resolved_at = now(), resolved_by = $3 WHERE order_id = $1 AND resolved_at IS NULL AND created_at = $2::timestamptz', [o.id, at, me]);

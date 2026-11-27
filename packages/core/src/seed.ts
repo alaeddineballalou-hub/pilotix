@@ -18,7 +18,7 @@ import { seed as seed_sav } from './seeds/sav';
 import { seed as seed_delivery, seedZrFees } from './seeds/delivery';
 import { seed as seed_zr } from './seeds/zr';
 import { seed as seed_cash } from './seeds/cash';
-import { seed as seed_pay } from './seeds/pay';
+import { seed as seed_pay, seedPayTakeback } from './seeds/pay';
 import { seed as seed_faults } from './seeds/faults';
 import { seed as seed_admin } from './seeds/admin';
 import { seed as seed_ads, seedAdLinks } from './seeds/ads';
@@ -475,6 +475,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number; ex
   if (expanded) await seed_inbox(db, users, now, opts.lang ?? 'fr');
   // the Community manager (the full demo): the orders she typed from her chats and calls, last (nothing above reads them)
   if (expanded && users.cm) await seedCmOrders(db, users.cm, now);
+  // agent pay (the full demo): a delivery already paid that its company corrected, taken back from Samira's next pay
+  if (expanded) await seedPayTakeback(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

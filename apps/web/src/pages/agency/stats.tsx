@@ -233,7 +233,7 @@ function MyGains() {
       </div>
       <Kpis>
         <KpiBox icon="wallet" label={t('paie.owedAgency')} value={da(g.owed)} sub={g.ready.total > 0 ? t('paie.owedSub', { ready: da(g.ready.total), open: da(Math.max(0, g.open.net)) }) : t('paie.owedSubOpen')} tone="ok" href="#/gains" />
-        <KpiBox icon="coins" label={t('paie.earned', { period: period(g.open.from, g.open.to) })} value={da(g.open.earned)} sub={`${t('paie.earnedSub', { count: g.open.orders, upsells: g.open.upsells })} · ${t('paie.payDay', { d: payDay(g.open.to) })}`} />
+        <KpiBox icon="coins" label={t('paie.earned', { period: period(g.open.from, g.open.to) })} value={da(g.open.earned)} sub={`${t('paie.earnedSub', { count: g.open.orders, upsells: g.open.upsells })}${g.open.back > 0 ? ` · ${t('paie.minusBack', { v: da(g.open.back) })}` : ''} · ${t('paie.payDay', { d: payDay(g.open.to) })}`} />
         <KpiBox icon="truck" label={t('paie.coming')} value={`+${da(g.coming.amount)}`} sub={t('paie.comingSub', { count: g.coming.count })} zero={!g.coming.amount} />
       </Kpis>
     </section>

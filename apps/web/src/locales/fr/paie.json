@@ -17,6 +17,7 @@
   "earnedSub_one": "{{count}} commande payée · {{upsells}} article(s) en plus",
   "earnedSub_other": "{{count}} commandes payées · {{upsells}} article(s) en plus",
   "minusAcompte": "−{{v}} d’acompte",
+  "minusBack": "−{{v}} repris (plus livrées)",
   "payDay": "paie le {{d}}",
   "coming": "En route",
   "comingSub_one": "{{count}} commande, si elle est livrée",
@@ -40,6 +41,8 @@
       "month": "{{d}}"
     },
     "team": "de {{name}}",
+    "back": "plus livrée {{d}} · déjà payée (livrée {{was}})",
+    "backTag": "Reprise",
     "upsell_one": "upsell +{{count}}",
     "upsell_other": "upsell +{{count}}",
     "less": "Voir moins",

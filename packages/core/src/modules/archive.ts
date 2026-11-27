@@ -116,6 +116,7 @@ export const USER_REFS: readonly Ref[] = [
   ['pay_payments', 'profile_id', 'cash'],
   ['pay_payments', 'paid_by', 'cash'],
   ['pay_payments', 'cancelled_by', 'cash'],
+  ['pay_takebacks', 'suivi_by', 'cash'],
   ['profiles', 'created_by', 'history'],
   // Pilot Checks: the change list of the owner's rules says who changed what
   ['pilot_check_log', 'user_id', 'history'],

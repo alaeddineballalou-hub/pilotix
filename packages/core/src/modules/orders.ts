@@ -1729,6 +1729,8 @@ export const FollowInput = z.object({
 });
 
 const MILESTONE: Partial<Record<FollowStatus, string>> = { prepared: 'prepared_at', shipped: 'shipped_at', delivered: 'delivered_at', returned: 'returned_at' };
+/** The statuses that pay the agents (pay.ts › PAID). */
+const PAID_FOLLOW: (FollowStatus | null)[] = ['delivered', 'exchanged'];
 /** Statuses that mean the parcel has physically left the depot (stock goes out on the first of them). */
 const LEFT_DEPOT: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'delivered', 'returning', 'exchanged', 'lost'];
 
@@ -1894,10 +1896,17 @@ export async function setFollow(
       // (its old product already came back with an SAV exchange scanned at the depot: never put in stock twice)
       const back = to === 'returned' && cur.shipped_at && !cur.returned_at
         && !(await tx.query(`SELECT 1 FROM stock_movements WHERE order_id = $1 AND reason = 'exchange_in' LIMIT 1`, [oid]))[0];
+      // A delivery that stops being « Livrée » is written for the pay (whoever was already paid for it gives it back on
+      // his next pay); delivered again later, it counts at its new delivery, once (the owner, 27 Nov 2026: « Take it from
+      // next pay »). (Before the change: its history still says who was paid.)
+      const wasPaid = PAID_FOLLOW.includes(from);
+      const redeliver = PAID_FOLLOW.includes(to) && !wasPaid && !!cur.delivered_at;
+      if (wasPaid && !PAID_FOLLOW.includes(to) && cur.delivered_at) await (await import('./pay')).takeBackDelivery(tx, oid);
       // shipped_at is set below (on whichever status the parcel leaves with); returning_at when it starts coming back
-      const ms = to === 'returning' ? 'returning_at' : MILESTONE[to] === 'shipped_at' ? undefined : MILESTONE[to];
+      const ms0 = to === 'returning' ? 'returning_at' : MILESTONE[to] === 'shipped_at' ? undefined : MILESTONE[to];
+      const ms = redeliver && ms0 === 'delivered_at' ? undefined : ms0;
       await tx.query(
-        `UPDATE orders SET follow_status=$2, ${ms ? `${ms} = COALESCE(${ms}, now()),` : ''}
+        `UPDATE orders SET follow_status=$2, ${ms ? `${ms} = COALESCE(${ms}, now()),` : ''}${redeliver ? 'delivered_at = now(),' : ''}
            shipped_at = CASE WHEN $9 THEN COALESCE(shipped_at, now()) ELSE shipped_at END,
            tracking = COALESCE($3, tracking), livreur_id = COALESCE($4, livreur_id),
            sub_status = CASE WHEN $8 THEN sub_status ELSE $5 END, follow_agent_id = CASE WHEN $6 AND ($2 IS DISTINCT FROM follow_status OR follow_agent_id IS NULL) THEN $7 ELSE follow_agent_id END,
@@ -1931,7 +1940,8 @@ export async function setFollow(
       if (to === 'delivered' && from !== 'delivered' && !cur.delivered_at) await tx.query('UPDATE customers SET delivered = delivered + 1 WHERE id = $1', [cur.customer_id]);
       if (to === 'returned' && from !== 'returned' && !cur.returned_at) await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
       // what the step replaces (« ↶ Annuler » puts it back) and whether the delivery company gave it (never undone here)
-      const prev = { sub: cur.sub_status ?? null, fa: numOrNull(cur.follow_agent_id), lv: numOrNull(cur.livreur_id), tr: cur.tracking ?? null, cbh: !!cur.cancel_by_hand };
+      // (delivered again: its first delivery's time, put back if this one is undone)
+      const prev = { sub: cur.sub_status ?? null, fa: numOrNull(cur.follow_agent_id), lv: numOrNull(cur.livreur_id), tr: cur.tracking ?? null, cbh: !!cur.cancel_by_hand, ...(redeliver ? { da: iso(cur.delivered_at) } : {}) };
       await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, opts.courierNotes?.get(oid) ?? input.note].filter(Boolean).join(' — ') || null, opts.courier ? { prev, courier: true, ...(opts.by ? { by: opts.by } : {}) } : { prev });
       // the livreur corrected his own « Livrée » (a tap by mistake): said plainly in the history
       if (fixed) await addEvent(tx, oid, me, 'note', null, 'event', `Correction du livreur : pas livrée finalement${input.reason ? ` (${input.reason})` : ''}`, { livreurFix: true });

@@ -21,6 +21,7 @@
   "earnedSub_many": "{{count}} طلبية مدفوعة · {{upsells}} قطعة إضافية",
   "earnedSub_other": "{{count}} طلبية مدفوعة · {{upsells}} قطعة إضافية",
   "minusAcompte": "−{{v}} تسبيق",
+  "minusBack": "−{{v}} مسترجعة (لم تعد مُسلّمة)",
   "payDay": "الدفع يوم {{d}}",
   "coming": "في الطريق",
   "comingSub_zero": "لا طلبية في الطريق",
@@ -48,6 +49,8 @@
       "month": "{{d}}"
     },
     "team": "من {{name}}",
+    "back": "لم تعد مُسلّمة {{d}} · دُفعت من قبل (سُلّمت {{was}})",
+    "backTag": "استرجاع",
     "upsell_zero": "بيع إضافي +{{count}}",
     "upsell_one": "بيع إضافي +{{count}}",
     "upsell_two": "بيع إضافي +{{count}}",

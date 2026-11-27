@@ -244,6 +244,7 @@ function PaySheet({ b, f, onClose }: { b: Board; f: PayFor; onClose: () => void 
                   <b>{period(x.from, x.to)}</b>
                   <small>
                     {t('paie.earnedSub', { count: x.orders, upsells: x.upsells })}
+                    {x.back > 0 ? ` · ${t('paie.minusBack', { v: da(x.back) })}` : ''}
                     {x.acomptes > 0 ? ` · ${t('paie.minusAcompte', { v: da(x.acomptes) })}` : ''}
                   </small>
                 </div>

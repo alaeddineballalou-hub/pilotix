@@ -17,6 +17,7 @@
   "earnedSub_one": "{{count}} paid order · {{upsells}} extra item(s)",
   "earnedSub_other": "{{count}} paid orders · {{upsells}} extra item(s)",
   "minusAcompte": "−{{v}} advance",
+  "minusBack": "−{{v}} taken back (no longer delivered)",
   "payDay": "paid on {{d}}",
   "coming": "On the way",
   "comingSub_one": "{{count}} order, if it is delivered",
@@ -40,6 +41,8 @@
       "month": "{{d}}"
     },
     "team": "by {{name}}",
+    "back": "no longer delivered {{d}} · already paid (delivered {{was}})",
+    "backTag": "Taken back",
     "upsell_one": "upsell +{{count}}",
     "upsell_other": "upsell +{{count}}",
     "less": "Show less",
