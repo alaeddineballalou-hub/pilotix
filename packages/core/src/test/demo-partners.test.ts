@@ -47,11 +47,20 @@ test('the demo store gets its agency and its marketer, each with work to show', 
 
   // the agency's chief: its seller, its orders to call
   const chiefA = await as(t, agency.schema, AG.email);
-  assert.deepEqual(((await call('agency.sellers', chiefA, {})) as any[]).map((s) => s.name), ['Pilotix Démo']);
+  // its two sellers (« Tous les vendeurs » as with a real agency): the demo store and the owner's « Maison Fatima »
+  assert.deepEqual(((await call('agency.sellers', chiefA, {})) as any[]).map((s) => s.name).sort(), ['Maison Fatima', 'Pilotix Démo']);
   const conf: any = await call('confirmation.list', { ...chiefA, seller: 'all' }, { sub: 'nouvelles' });
   assert.ok(conf.rows.length > 0, 'new orders to call');
+  // each row keeps its own seller's tries (the store 3, Maison Fatima 6); the counters add both sellers up
+  const att: any = await call('confirmation.list', { ...chiefA, seller: 'all' }, { sub: 'attente' });
+  assert.deepEqual([...new Set(att.rows.map((r: any) => r.tries))].sort(), [3, 6]);
+  assert.equal(Object.values(att.buckets as Record<string, number>).reduce((a, b) => a + b, 0), att.total);
   // the agency's pay: Nora earns from the store's orders she confirmed; Yasmine has no plan yet (the red alert)
   const nora = await as(t, agency.schema, 'nora.agence@demo.pilotix.dz');
+  // her Terminé of an older month, both sellers together: the list shows its last 30 days, the number all of it
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const old: any = await call('orders.list', { ...nora, seller: 'all' }, { status: 'livre', from: day(Date.now() - 58 * 86_400_000), to: day(Date.now() - 27 * 86_400_000) });
+  assert.ok(old.totalAll > old.total, `${old.totalAll} delivered that month, ${old.total} of them in the last 30 days`);
   const gains: any = await call('pay.mine', nora, {});
   assert.equal(gains.plans.length, 1);
   assert.ok(gains.owed > 0, 'Mes gains: money from the store\'s orders');

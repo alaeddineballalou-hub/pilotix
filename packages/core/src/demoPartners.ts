@@ -2,8 +2,10 @@
 // working for the demo store, with their teams, prices, contracts, orders, ad sets and bills — so the store's
 // « Agences » and « Marketers » pages and the two partners' own spaces can be tried with fake data. Built the first
 // time one of them is opened: it adds the platform's tables (shop #1 = the demo store) and two small shops.
-import { DEMO_PARTNER_ACCOUNTS } from '@pilotix/shared';
+import { DEMO_AGENCY_TEAM, DEMO_MARKETER_TEAM, DEMO_PARTNER_ACCOUNTS } from '@pilotix/shared';
 import { num } from './db';
+import { DEMO_BOUTIQUES, seedDemoBoutiques } from './demoBoutiques';
+import { getSetting } from './settings';
 import type { Ctx } from './rpc';
 import { dispatch, makeSession, Procedure } from './rpc';
 import { REGISTRY } from './registry';
@@ -26,17 +28,6 @@ async function as(t: Tenancy, shop: Shop, email: string, now: number): Promise<C
   return { db, session: makeSession(p), now: () => now, emit: () => {}, t, shop: shopCtx(shop, st, set.soon.features) };
 }
 
-const AGENCY_TEAM = [
-  { name: 'Nora Hamdi', email: 'nora.agence@demo.pilotix.dz', roles: ['confirmation'] },
-  { name: 'Yasmine Kaci', email: 'yasmine.agence@demo.pilotix.dz', roles: ['confirmation'] },
-  { name: 'Ali Mansouri', email: 'ali.agence@demo.pilotix.dz', roles: ['suivi'] },
-  { name: 'Riad Bouzid', email: 'riad.agence@demo.pilotix.dz', roles: ['agent_manager'] },
-  { name: 'Leïla Mansouri', email: 'leila.agence@demo.pilotix.dz', roles: ['sav'] },
-];
-const MARKETER_TEAM = [
-  { name: 'Nadir Ferhat', email: 'nadir.mk@demo.pilotix.dz', roles: ['marketer'] },
-  { name: 'Selma Kaci', email: 'selma.mk@demo.pilotix.dz', roles: ['marketer'] },
-];
 const NO_BONUS = { bonusRate: { min: 0, amount: 0 }, bonusVolume: { above: 0, amount: 0 } };
 const AGENCY_PRICES = { perConfirmed: 0, perDelivered: 180, perUpsell: 60, monthly: 0, bonusRate: { min: 70, amount: 20 }, bonusVolume: { above: 300, amount: 15 }, perSuccess: 0, profitRate: 0 };
 const MARKETER_PRICES = { perConfirmed: 0, perDelivered: 150, perUpsell: 0, monthly: 0, ...NO_BONUS, perSuccess: 15000, profitRate: 10 };
@@ -56,7 +47,7 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
   const hash = (await sdb.query(`SELECT password_hash FROM profiles WHERE email = 'admin@demo.pilotix.dz'`))[0]?.password_hash as string;
   if (!hash) throw new Error('demo: seed the store first');
   const [AG, MK] = DEMO_PARTNER_ACCOUNTS;
-  const mk = async (who: (typeof DEMO_PARTNER_ACCOUNTS)[number], team: { name: string; email: string; roles: string[] }[]) => {
+  const mk = async (who: (typeof DEMO_PARTNER_ACCOUNTS)[number], team: readonly { name: string; email: string; roles: string[] }[]) => {
     const s = await provisionShop(t, { name: who.shop, kind: who.kind, planId: null, trialDays: 0, owner: { name: who.name, email: who.email, language: 'fr' }, passwordHash: hash, verified: true, now });
     // Pilotix checked it a while ago
     await t.platform.query('UPDATE platform.shops SET agency_verified_at = $2, created_at = $2 WHERE id = $1', [s.id, new Date(now - 60 * DAY).toISOString()]);
@@ -64,8 +55,8 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
     for (const p of team) await db.query('INSERT INTO profiles (name, email, password_hash, roles, language) VALUES ($1, $2, $3, $4, $5)', [p.name, p.email, hash, p.roles, 'fr']);
     return (await loadShop(t, { id: s.id }))!;
   };
-  const agency = await mk(AG, AGENCY_TEAM);
-  const marketer = await mk(MK, MARKETER_TEAM);
+  const agency = await mk(AG, DEMO_AGENCY_TEAM);
+  const marketer = await mk(MK, DEMO_MARKETER_TEAM);
 
   const owner = await as(t, store, 'admin@demo.pilotix.dz', now);
   const chiefA = await as(t, agency, AG.email, now);
@@ -80,13 +71,13 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
   const forMarketer = [await pid('PX-LIT'), await pid('PX-CHA'), await pid('PX-TAP')];
 
   // the store asks both; they accept and put their team on it
-  const linkOf = async (partner: Shop, chief: Ctx, tasks: string[], products: number[]) => {
-    const { id } = await run(owner, 'partners.request', { agencyId: partner.id, tasks, products });
+  const linkOf = async (partner: Shop, chief: Ctx, tasks: string[], products: number[], from: Ctx = owner, days = 46) => {
+    const { id } = await run(from, 'partners.request', { agencyId: partner.id, tasks, products });
     await run(chief, 'agency.answer', { id, accept: true });
     const team = await run(chief, 'agency.team', {});
     await run(chief, 'agency.setAgents', { id, people: team.map((p: any) => p.id) });
     // a contract of some weeks already (its numbers and last month's bill)
-    await t.platform.query('UPDATE platform.agency_links SET created_at = $2, answered_at = $3, started_at = $3 WHERE id = $1', [id, new Date(now - 47 * DAY).toISOString(), new Date(now - 46 * DAY).toISOString()]);
+    await t.platform.query('UPDATE platform.agency_links SET created_at = $2, answered_at = $3, started_at = $3 WHERE id = $1', [id, new Date(now - (days + 1) * DAY).toISOString(), new Date(now - days * DAY).toISOString()]);
     return num(id);
   };
   const agencyLink = await linkOf(agency, chiefA, ['confirmation', 'suivi', 'sav'], forAgency);
@@ -109,6 +100,32 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
   if (conf.length)
     await sdb.query(`UPDATE orders SET agent_id = ($2::bigint[])[1 + (id % $3)] WHERE conf_agency_id = $1 AND agent_id IS NOT NULL`, [agency.id, conf, conf.length]);
   if (suivi.length) await sdb.query(`UPDATE orders SET follow_agent_id = $2 WHERE follow_agency_id = $1 AND follow_agent_id IS NOT NULL`, [agency.id, suivi[0]]);
+
+  // its second seller (the owner, 27 Nov 2026: « Tous les vendeurs » as with a real agency, two sellers or more): the demo
+  // owner's boutique « Maison Fatima » gives it its bedding (its other products stay with its own team) and calls 6 times
+  // before a cancel where the demo store keeps 3 — so each seller's own rules show side by side in the agency's lists
+  await seedDemoBoutiques(t, { now });
+  const fatima = await loadShop(t, { slug: DEMO_BOUTIQUES[0].slug });
+  if (fatima) {
+    const boss = await as(t, fatima, 'admin@demo.pilotix.dz', now);
+    const fdb = t.shop(fatima.schema);
+    const bedding = (await fdb.query('SELECT id FROM products WHERE sku = ANY($1) ORDER BY id', [['PARURE', 'RIDEAU', 'TAPIS']])).map((r: any) => num(r.id));
+    await linkOf(agency, chiefA, ['confirmation', 'suivi', 'sav'], bedding, boss, 24);
+    const there = (await fdb.query('SELECT id, roles FROM profiles WHERE agency_id = $1 AND active ORDER BY id', [agency.id])).map((r: any) => ({ id: num(r.id), roles: r.roles as string[] }));
+    const fConf = there.filter((p) => p.roles.includes('confirmation')).map((p) => p.id);
+    const fSuivi = there.filter((p) => p.roles.includes('suivi') && !p.roles.includes('confirmation')).map((p) => p.id);
+    await fdb.query(
+      `UPDATE orders o SET conf_agency_id = $1, follow_agency_id = $1, route_product_id = f.product_id
+         FROM (SELECT DISTINCT ON (order_id) order_id, product_id FROM order_items ORDER BY order_id, id) f
+        WHERE f.order_id = o.id AND f.product_id = ANY($2)`,
+      [agency.id, bedding],
+    );
+    if (fConf.length)
+      await fdb.query(`UPDATE orders SET agent_id = ($2::bigint[])[1 + (id % $3)] WHERE conf_agency_id = $1 AND agent_id IS NOT NULL`, [agency.id, fConf, fConf.length]);
+    if (fSuivi.length) await fdb.query(`UPDATE orders SET follow_agent_id = $2 WHERE follow_agency_id = $1 AND follow_agent_id IS NOT NULL`, [agency.id, fSuivi[0]]);
+    const calls = await getSetting(fdb, 'calls');
+    await run(boss, 'admin.calls.save', { slots: calls.slots, tries: 6, firstMinutes: calls.firstMinutes, paceMinutes: calls.paceMinutes, cancelAfterNoAnswer: calls.cancelAfterNoAnswer });
+  }
 
   // the agency's agent pay (Facturation › Paie, « Mes gains »): a confirmation plan and a suivi plan, given 40 days
   // ago (so last month's pay is ready); Yasmine has none yet (the chief's red alert)

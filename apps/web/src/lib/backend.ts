@@ -490,6 +490,8 @@ class DemoBackend implements Backend {
     if (!this.partners)
       this.partners = (async () => {
         const { core, t } = await this.boot();
+        // the agency's second seller is one of the demo owner's boutiques (core demoPartners.ts): made first, once
+        await this.withBoutiques();
         this.progress('Création de l’agence et du marketer d’exemple…');
         await core.seedDemoPartners(t);
         const s = (await core.loadShop(t, { primary: true }))!;
