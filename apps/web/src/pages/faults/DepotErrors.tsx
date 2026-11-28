@@ -60,7 +60,7 @@ export function DepotErrors() {
             <p className="pxfa-big pxfa-mine">
               <b className="ltr">{n(d.n)}</b>
               <span>
-                {t('faults.depot.mine')} · {d.mineRate !== null ? t('faults.depot.mineRate', { count: d.n, v: pct(d.mineRate, 1) }) : t('faults.depot.countMine', { count: d.n })}
+                {d.mineRate !== null ? t('faults.depot.mineRate', { count: d.n, v: pct(d.mineRate, 1) }) : t('faults.depot.countMine', { count: d.n })}
               </span>
             </p>
           )}

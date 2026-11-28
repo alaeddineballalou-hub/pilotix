@@ -183,8 +183,9 @@ function Body({ D, f, onLate }: { D: Ds; f: DepotF; onLate: () => void }) {
 function People({ D, f, rate }: { D: Ds; f: DepotF; rate: number | null }) {
   const { t } = useTranslation();
   const head = (k: 'cPrepared' | 'cErrors' | 'cRate') => t(`depot.sx.${k}`);
+  // « Sans nom » has no rate: its orders and its errors are not one person's
   const line = (key: string, name: ReactNode, prepared: number | null, errors: number, x: DepotTap, few = false) => {
-    const r = prepared ? errors / prepared : null;
+    const r = prepared && !few ? errors / prepared : null;
     const bad = r !== null && rate !== null && errors >= 2 && r > rate;
     const go = errors ? () => goErrors(f, x) : undefined;
     return (
