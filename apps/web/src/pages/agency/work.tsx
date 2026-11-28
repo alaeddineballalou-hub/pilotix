@@ -248,7 +248,7 @@ export function AllSuivi({ sub, scope }: PageProps & { scope?: AllScope }) {
   return (
     <>
       <div style={{display:'flex',alignItems:'center',gap:6}}><div style={{flex:1,minWidth:0}}><StageBar flow={false} items={(scope?.tabs ?? stepLinks(tab)).map((k) => ({ key: k, label: t(k === 'traites' && !scope ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k as Tab] }))} current={sub==='stats'?'stats':tab === 'alertes' ? 'alertes_new' : tab} /></div>{stats&&<a className={`btn small${sub==='stats'?' primary':''}`} href="#/suivi/stats" title={t('suivi.tabs.stats')} aria-label={t('suivi.tabs.stats')}><Icon name="chart"/></a>}</div>
-      {sub==='stats' ? <DeliveryStats/> : tab === 'annules' ? (
+      {sub==='stats' ? <DeliveryStats scope={scope?.counts}/> : tab === 'annules' ? (
         // « Annulé » is the same screen everywhere (owner's choice, 24 Nov 2026), on its returns
         <DoneScreen sub="annulees" start="back" />
       ) : !scope && (tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours') ? (
