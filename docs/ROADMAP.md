@@ -5,6 +5,8 @@ Goal: protect merchants, make stock and COD money exactly right, and keep improv
 - Rules for doing the work: [AGENTS.md](../AGENTS.md)
 - How a change goes live: [CLAUDE.md](../CLAUDE.md)
 
+Run by the autopilot: [docs/autopilot/RUNNER.md](autopilot/RUNNER.md) · progress in [LEDGER.md](autopilot/LEDGER.md) · your decisions in [DECISIONS.md](autopilot/DECISIONS.md).
+
 Status: **not started.** All baselines are *Unmeasured* until Phase 0 is complete. No delivery date is set before discovery.
 
 ---
