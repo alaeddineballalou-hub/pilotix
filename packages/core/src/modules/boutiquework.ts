@@ -80,7 +80,7 @@ export const OTHER_BOUTIQUE = new Set(
     'prefs: get',
     'sav: catalog create exchange findOrder get kpis list rate settle stats update',
     'stats: agents board dashDepot dashLivreurs dashMeta dashSav dashSuivi doctor livreurs me myLivreur now overview overview2 presence teams',
-    'suivi: act claimCategories claimCreate claimPush claimRemind claimSync claimUpdate claims claimsLate contacts counts findOrders list motifStats motifs next release resolve stuckDone swap swapCandidates swapTarget treat unassign',
+    'suivi: act claimCategories claimCreate claimPush claimRemind claimSync claimUpdate claims claimsLate contacts counts findOrders list motifStats motifs next release resolve stats statsOn stuckDone swap swapCandidates swapTarget treat unassign',
     'users: list',
   ].flatMap((line) => {
     const [ns, names] = line.split(': ');
@@ -104,6 +104,8 @@ export const BOUTIQUE_FANOUT: Record<string, Fan> = {
   // Terminé › Annulé: « Raisons des annulations » of every boutique together
   'orders.cancelReport': FANOUT['orders.cancelReport'],
   'suivi.counts': FANOUT['suivi.counts'],
+  'suivi.statsOn': FANOUT['suivi.statsOn'],
+  'suivi.stats': FANOUT['suivi.stats'],
   'suivi.list': FANOUT['suivi.list'],
   'catalog.guides': FANOUT['catalog.guides'],
   'catalog.assigned': FANOUT['catalog.assigned'],

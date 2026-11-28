@@ -587,6 +587,13 @@ test('an agency works on several sellers: one at a time or all together, its peo
   await b.db.query('UPDATE orders SET follow_agent_id=$2 WHERE id=$1', [cb.id, linaProfile.id]);
   assert.ok(!((await call('suivi.list', lb1, { tab: 'enlivraison' })) as any).rows.some((r: any) => r.id === cb.id));
   assert.ok(((await call('suivi.list', lb1, { tab: 'alertes' })) as any).rows.some((r: any) => r.id === cb.id));
+  // The chief's combined statistics include only the agency's follow-up work, even across sellers.
+  const chiefAll = await ctxOf('samir@centre.dz', 'all');
+  assert.deepEqual(await call('suivi.statsOn', chiefAll, {}), { on: true });
+  assert.deepEqual(await call('suivi.statsOn', lb1, {}), { on: false });
+  await assert.rejects(call('suivi.stats', lb1, { per: '30' }));
+  const delivery = await call('suivi.stats', chiefAll, { per: '30' });
+  assert.deepEqual(delivery.rows.map((row: { product: { key: string }; totals: { sent: number } }) => [row.product.key, row.totals.sent]), [[b.id + ':' + b.products.CASQ, 1]]);
   await b.db.query('UPDATE orders SET follow_status=NULL, shipped_at=NULL WHERE id=$1', [cb.id]);
   assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'alertes' })) as any).total, 0);
   // flagged as an alert: Nora (confirmation only, no Alertes) still watches it in « En livraison »

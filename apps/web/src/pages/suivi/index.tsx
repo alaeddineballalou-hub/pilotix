@@ -19,6 +19,7 @@ import { NewClaimModal } from './Claims';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
+import { DeliveryStats } from './DeliveryStats';
 import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
 import { TabletColsButton, useTabletCols } from '../../ui/tabletCols';
 import { HistoryButton, PhoneCell } from '../confirmation/History';
@@ -61,7 +62,7 @@ type ListSub = Exclude<Sub, 'messages'>;
 // The bar is drawn by hand (Alertes and its parts, an agency's steps), but its tabs are the menu's (MENU_TABS.suivi,
 // packages/shared/src/menu.ts, shared with Utilisateurs › Rôles): a tab added on one side only stops the build here.
 type MenuSuivi = (typeof MENU_TABS.suivi)[number];
-const sameTabs: [Exclude<MenuSuivi, Sub | 'reglages'>, Exclude<Sub, MenuSuivi | 'alertes_new' | 'alertes_encours' | 'erreurs' | 'resolus'>] extends [never, never] ? true : false = true;
+const sameTabs: [Exclude<MenuSuivi, Sub | 'reglages' | 'stats'>, Exclude<Sub, MenuSuivi | 'alertes_new' | 'alertes_encours' | 'erreurs' | 'resolus'>] extends [never, never] ? true : false = true;
 void sameTabs;
 
 /** « Suivi »: this boutique's, or every boutique's with « Toutes les boutiques ». */
@@ -87,6 +88,7 @@ function SuiviOne({ sub: asked0 }: PageProps) {
   const sub = asked0?.replace(/-/g, '_');
   const agency = useInAgency();
   const { has } = useSession();
+  if (sub === 'stats') return <><SuiviBar tab="alertes_new" statsActive /><DeliveryStats /></>;
   // « Messages » left Suivi (the owner, 25 Nov 2026): it is Pilot Automations › Messages; the old address opens it
   if (sub === 'messages' && !agency) return <GoTo href="#/notify/messages" />;
   // « Réglages »: every setting of Suivi (a store's own; an agency has its own settings page)
@@ -147,7 +149,7 @@ function SuiviOne({ sub: asked0 }: PageProps) {
 }
 
 /** The menu « Suivi »'s one row (Nouvelles alertes · En cours · Résolu · Annulés · Réclamation); an agency's steps. */
-function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
+function SuiviBar({ tab, cfgOn = false, statsActive = false }: { tab: Sub; cfgOn?: boolean; statsActive?: boolean }) {
   const { t } = useTranslation();
   const agency = useInAgency();
   const { has, session } = useSession();
@@ -155,6 +157,8 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   // administrator, or a person allowed to share the alerts (« Affectation »); a store's, not an agency's
   const cfg = !agency && tabOn('suivi', 'reglages') && (!!session?.isAdmin || !!session?.profile.canAffect);
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
+  const stats = useRpc('suivi.statsOn', {}, {enabled: tabOn('suivi','stats'), retry:false, staleTime:300000}).data?.on;
+  const chart = stats && <a className={`bjm-p bjm-ico${statsActive ? ' on' : ''}`} href="#/suivi/stats" aria-label={t('suivi.tabs.stats')} title={t('suivi.tabs.stats')} aria-current={statsActive?'page':undefined}><Icon name="chart"/></a>;
   // a phone shows a few steps at a time: the current one is brought into view
   const bar = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -170,7 +174,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + (right - r.left) / 2) });
     // again once the counts are in: they widen the steps
   }, [tab, c]);
-  const active = (k: Sub) => !cfgOn && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'reclamation', 'annules', 'swap'].includes(tab)));
+  const active = (k: Sub) => !cfgOn && !statsActive && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'reclamation', 'annules', 'swap'].includes(tab)));
   // (a tab taken from the role in Utilisateurs › Rôles is not drawn)
   const item = (k: Sub, count?: number, x = false, label?: string) => !tabOn('suivi', k) ? null : (
     <a className={`bjm-p ${active(k) ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : active(k) ? 'location' : undefined}>
@@ -210,6 +214,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
         ) : (
           item(tab, c?.livres ?? 0)
         )}
+        {chart && <span className="bjm-end">{chart}</span>}
       </nav>
     );
   }
@@ -222,7 +227,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
   // The owner (25 Nov 2026): the menu's « Suivi » shows only the alerts, the swaps and the réclamations; the menu's « En
   // livraison » everything about the delivery. One row each, never mixed. (« Traités » became En cours › Attend ZR and
   // Résolu; « Messages » is Pilot Automations › Messages: their addresses still open.)
-  if (inAlertBar(tab) || cfgOn)
+  if (inAlertBar(tab) || cfgOn || statsActive)
     return (
       <nav ref={bar} className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
         {item('alertes_new', c?.alertes_new ?? 0, false, t('suivi.clair.tab.alertes_new'))}
@@ -233,7 +238,7 @@ function SuiviBar({ tab, cfgOn = false }: { tab: Sub; cfgOn?: boolean }) {
         {item('annules', c?.annulesClair ?? 0, false, t('suivi.clair.tab.annules'))}
         {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true, t('suivi.clair.tab.reclamation'))}
         {/* « Réglages »: apart at the end, with a gear (Utilisateurs › Rôles: the owners and the agent managers by default) */}
-        {gear}
+        {(chart || gear) && <span className="bjm-end">{chart}{gear}</span>}
       </nav>
     );
   // the menu « En livraison » (and a store's other delivery lists): no Suivi tab row

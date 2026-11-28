@@ -12,6 +12,7 @@ import { loadShop, platformSettings, shopCtx, shopStatus } from '../platform/sho
 import { LINK_SQL, Link, toLink } from './agencies';
 import { FANOUT, fanOut, nextAcross, Runner } from './fanout';
 import { profileById } from './users';
+import { getSetting } from '../settings';
 
 export type { Runner } from './fanout';
 
@@ -52,10 +53,20 @@ export async function sellersOf(ctx: Ctx): Promise<AgencySeller[]> {
  * confirmation agency's chief and its chefs d'équipe lead its people there (agencyscope.ts: agencyLead): read from
  * their roles in the agency, as they are now.
  */
-async function storeCtx(ctx: Ctx, w: Work): Promise<Ctx> {
+async function storeCtx(ctx: Ctx, w: Work, action?: string): Promise<Ctx> {
   const c = await storeCtxOf(ctx, w);
   if (ctx.shop?.kind !== 'agency') return c;
-  return { ...c, session: { ...c.session, profile: { ...c.session.profile, agencyLead: hasRole(ctx.session, 'agent_manager') } } };
+  const next = { ...c, session: { ...c.session, profile: { ...c.session.profile, agencyLead: hasRole(ctx.session, 'agent_manager') } } };
+  if (action === 'suivi.stats' || action === 'suivi.statsOn') {
+    const teams = await getSetting(ctx.db,'teams');
+    const admin = ctx.session.isAdmin || ctx.session.roles.includes('vendeur');
+    const own = admin ? teams : teams.filter(t=>t.managerId===ctx.session.profile.id);
+    const members = await c.db.query('SELECT id,agency_profile_id FROM profiles WHERE agency_id=$1 AND active',[ctx.shop.id]);
+    const mapped = own.map(t=>({id:t.id,name:t.name,agentIds:members.filter(m=>t.agentIds.includes(Number(m.agency_profile_id))||t.managerId===Number(m.agency_profile_id)).map(m=>num(m.id))}));
+    // Agency admins may see all of their agency's assigned orders; team managers only their own team.
+    return {...next,deliveryStatsTeams: mapped, ...(admin ? {} : {deliveryStatsRestricted:true})};
+  }
+  return next;
 }
 
 async function storeCtxOf(ctx: Ctx, w: Work): Promise<Ctx> {
@@ -90,9 +101,9 @@ export async function sellerCall(name: string, ctx: Ctx, input: unknown, run: Ru
   if (seller !== 'all') {
     const w = (await sellerWork(ctx, seller))[0];
     if (!w) throw forbidden('Vous ne travaillez pas pour ce vendeur');
-    return run(await storeCtx(ctx, w), name, input);
+    return run(await storeCtx(ctx, w, name), name, input);
   }
-  const targets = (await sellerWork(ctx)).map((w) => ({ source: { id: w.L.info.store.id, name: w.L.info.store.name }, ctx: () => storeCtx(ctx, w) }));
+  const targets = (await sellerWork(ctx)).map((w) => ({ source: { id: w.L.info.store.id, name: w.L.info.store.name }, ctx: () => storeCtx(ctx, w, name) }));
   if (name === 'orders.next') return nextAcross(targets, input, run);
   const fan = FANOUT[name];
   if (!fan) throw bad('Choisissez un vendeur en haut de la page pour cette action');

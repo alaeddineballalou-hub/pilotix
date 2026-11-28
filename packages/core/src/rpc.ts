@@ -73,6 +73,9 @@ export interface Ctx {
    * picker at the top of the page). The work on orders runs in that store (modules/agencywork.ts).
    */
   seller?: number | 'all';
+  /** Internal team scope for agency delivery statistics (seller profile IDs). */
+  deliveryStatsTeams?: { id:string; name:string; agentIds:number[] }[];
+  deliveryStatsRestricted?: boolean;
   /**
    * In a store, for someone with several boutiques: « Toutes les boutiques » ('all', each one answering, put together) or
    * one of their other boutiques, whose order is open on screen (its work runs there, as their account there):
