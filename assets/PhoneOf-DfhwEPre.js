@@ -1,0 +1,1 @@
+import{u as o,a as d,j as s,I as i}from"./kit-DrNp2uhs.js";function h({o:n,small:a,className:e=""}){const{t:r}=o();return n.phoneHidden?d("span",{className:`px-ph-hid ${e}`,title:r("orders.phoneHiddenS"),children:[s(i,{name:"lock"}),r("orders.phoneHidden")]}):a?s("small",{className:`ltr ${e}`,children:n.phone}):s("span",{className:`ltr ${e}`,children:n.phone})}export{h as P};
