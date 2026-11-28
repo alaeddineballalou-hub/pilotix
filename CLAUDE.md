@@ -1,5 +1,7 @@
 # Working on Pilotix
 
+Read [AGENTS.md](AGENTS.md) first (rules for every change) and [docs/ROADMAP.md](docs/ROADMAP.md) (the engineering plan).
+
 ## Putting a change live — the owner's rule (11 Nov 2026)
 
 The agents work in Pilotix all day. Every server update restarts it, and many updates in one day made them drop.
