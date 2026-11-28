@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { MENU_PAGES, MENU_TABS, RIGHTS, rightDef, SPACES, STORE_MENU, TAB_LINES } from '@pilotix/shared';
+import { menuLine, MENU_PAGES, MENU_TABS, RIGHTS, rightDef, SPACES, STORE_MENU, TAB_LINES } from '@pilotix/shared';
 import { REGISTRY } from '../index';
 import { PROC_RIGHTS, rightsNeeded } from '../modules/rights';
 import { FREE_ACTIONS } from './rights-free';
@@ -52,6 +52,13 @@ test('the menu list: the screens name real lines, every page is on a screen, the
   for (const p of MENU_PAGES) assert.deepEqual(RIGHTS.filter((d) => d.kind === 'tab' && d.in === p.id).map((d) => d.id.split('/')[1]), p.tabs.map((t) => t.id), `${p.id}: its tabs`);
   // and its buttons sit on a page of the list (or the orders' and « everywhere » lines)
   for (const d of RIGHTS) if (d.kind === 'act') assert.ok(d.in === 'orders' || d.in === 'general' || rightDef(`page:${d.in}`), `${d.id}: « ${d.in} » is not a page of the menu`);
+});
+
+test('delivery statistics open under En livraison in the store menu', () => {
+  const delivery = menuLine('enlivraison')?.line;
+  assert.equal(delivery?.tabOf, 'suivi');
+  assert.ok(delivery?.tabsToo?.includes('stats'));
+  assert.equal(menuLine('suivi')?.line.href, '#/suivi/alertes');
 });
 
 test('every page, tab, button, screen and group has its name in French, English and Arabic', () => {
