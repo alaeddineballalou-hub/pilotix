@@ -25,6 +25,7 @@ import { DepotSettings } from './Settings';
 import { tabOn } from '../../lib/rights';
 import { useAllMode } from '../../layout/AllBoutiques';
 import { DepotErrors } from '../faults/DepotErrors';
+import { DepotStats } from './DepotStats';
 
 /** « Dépôt »: this boutique's, or every boutique's with « Toutes les boutiques ». */
 export function Depot(p: PageProps) {
@@ -41,6 +42,9 @@ const AllDepotPage = lazy(() => import('../boutiques/all').then((m) => ({ defaul
 function DepotOne({ sub }: PageProps) {
   const stage = depotStage(sub);
   const counts = useRpc('depot.counts', {}, { refetchInterval: 60_000 });
+  // « Statistiques »: its tab only for those who see the depot's names (its managers, the administrators, the seller)
+  const statsOn = useRpc('depot.statsOn', {}, { staleTime: 300_000, retry: false });
+  const stats = !!statsOn.data?.on;
   // phones: the first stage is products first (pick), then the orders that have everything (pack, partner, dispatch)
   const phone = useIsPhone();
   // computers too: the phone's cards laid out wide (« Tableau » goes back to the big tables)
@@ -50,26 +54,27 @@ function DepotOne({ sub }: PageProps) {
   if (sub === 'reglages' && tabOn('depot', 'reglages'))
     return (
       <>
-        <DepotStageBar stage={stage} counts={counts.data} phone={phone} cfgOn />
+        <DepotStageBar stage={stage} counts={counts.data} phone={phone} stats={stats} cfgOn />
         <DepotSettings />
       </>
     );
   return (
     <>
-      <DepotStageBar stage={stage} counts={counts.data} phone={phone} />
+      <DepotStageBar stage={stage} counts={counts.data} phone={phone} stats={stats} />
       {/* the first stage is always cards (picking by variant); the switch is for the other stages */}
-      {!phone && stage !== 'preparer' && stage !== 'erreurs' && (
+      {!phone && stage !== 'preparer' && stage !== 'erreurs' && stage !== 'stats' && (
         <div className="px-vsw-row">
           <ViewSwitch mode={mode} onChange={setMode} />
         </div>
       )}
-      <div className={(cards || stage === 'preparer' || stage === 'erreurs') && !phone ? 'px-wide' : undefined}>
+      <div className={(cards || stage === 'preparer' || stage === 'erreurs' || stage === 'stats') && !phone ? 'px-wide' : undefined}>
         {stage === 'preparer' && <PhonePrep />}
         {stage === 'prepares' && <DispatchAlerts />}
         {stage === 'prepares' && (cards ? <PhoneDispatch /> : <Prepares />)}
         {stage === 'dispatchees' && (cards ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
         {stage === 'retours' && (cards ? <PhoneReturns /> : <Retours />)}
         {stage === 'erreurs' && <DepotErrors />}
+        {stage === 'stats' && <DepotStats />}
       </div>
     </>
   );

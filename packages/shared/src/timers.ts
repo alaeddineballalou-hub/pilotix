@@ -138,3 +138,32 @@ export function addWorkMinutes(from: number, minutes: number, s: CallSettings): 
   }
   return t;
 }
+
+/** A statistics period: today, yesterday, the last 7 or 30 days, this month, or chosen days (« Personnalisé »). */
+export type StatsPeriod = 'today' | 'yesterday' | '7' | '30' | 'month' | 'custom';
+const KF_DAY = 86_400_000;
+/** A period's Algiers days as [a, b) in ms (« custom »: `from` / `to` are YYYY-MM-DD, both included). */
+export function kfRange(now: number, i: { per: StatsPeriod; from?: string; to?: string }): { a: number; b: number } {
+  const day = algiersDayStart(now);
+  switch (i.per) {
+    case 'yesterday':
+      return { a: day - KF_DAY, b: day };
+    case '7':
+      return { a: day - 6 * KF_DAY, b: day + KF_DAY };
+    case '30':
+      return { a: day - 29 * KF_DAY, b: day + KF_DAY };
+    case 'month': {
+      const d = new Date(now + 3_600_000);
+      return { a: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - 3_600_000, b: day + KF_DAY };
+    }
+    case 'custom': {
+      const p = (s: string | undefined) => (s ? Date.parse(s + 'T00:00:00Z') - 3_600_000 : day);
+      let a = p(i.from);
+      let b = p(i.to);
+      if (a > b) [a, b] = [b, a];
+      return { a, b: b + KF_DAY };
+    }
+    default:
+      return { a: day, b: day + KF_DAY };
+  }
+}

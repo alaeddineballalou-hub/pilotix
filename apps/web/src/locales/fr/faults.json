@@ -158,7 +158,12 @@
     "sentToSeller": "Envoyé à l’admin et au vendeur : eux décident.",
     "noteTeam": "Tu vois les noms du dépôt. Chaque agent voit seulement ses erreurs.",
     "noteMine": "Tu vois seulement tes erreurs. Pas d’accord ? « Pas moi » : l’admin décide.",
-    "preparedBy": "Préparé par {{who}}"
+    "preparedBy": "Préparé par {{who}}",
+    "errTitle_one": "Erreurs du dépôt · {{count}} colis",
+    "errTitle_other": "Erreurs du dépôt · {{count}} colis",
+    "noneP": "Aucune erreur sur cette période.",
+    "chipNone": "Sans nom",
+    "back": "Statistiques"
   },
   "mine": {
     "title": "Mes erreurs",

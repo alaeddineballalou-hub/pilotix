@@ -1,6 +1,6 @@
 // Confirmation queue: lists with call deadlines, the agent banner, and the KPI blocks of
 // Nouvelles / En cours / Confirmées. Order changes go through modules/orders.ts.
-import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO, ConfStatus, LEVEL_RANK, messageTry, nextDue, Order, slotAt, wilayaAndOld } from '@pilotix/shared';
+import { algiersDayStart, CallSettings, kfRange, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO, ConfStatus, LEVEL_RANK, messageTry, nextDue, Order, slotAt, wilayaAndOld } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
@@ -173,30 +173,8 @@ export const KfInput = z.object({
 });
 export type KfInput = z.infer<typeof KfInput>;
 
-export function kfRange(now: number, i: { per: KfInput['per']; from?: string; to?: string }): { a: number; b: number } {
-  const day = algiersDayStart(now);
-  switch (i.per) {
-    case 'yesterday':
-      return { a: day - DAY, b: day };
-    case '7':
-      return { a: day - 6 * DAY, b: day + DAY };
-    case '30':
-      return { a: day - 29 * DAY, b: day + DAY };
-    case 'month': {
-      const d = new Date(now + 3_600_000);
-      return { a: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - 3_600_000, b: day + DAY };
-    }
-    case 'custom': {
-      const p = (s: string | undefined) => (s ? Date.parse(s + 'T00:00:00Z') - 3_600_000 : day);
-      let a = p(i.from);
-      let b = p(i.to);
-      if (a > b) [a, b] = [b, a];
-      return { a, b: b + DAY };
-    }
-    default:
-      return { a: day, b: day + DAY };
-  }
-}
+// kfRange (a period → its Algiers days) lives in @pilotix/shared: faults.ts uses it too
+export { kfRange };
 /**
  * « Date de changement de statut » (the owner's rule, 27 Nov 2026): the day an order's CONFIRMATION status changed —
  * never its last change of any kind (updated_at moves when the depot or the courier touches the order: an order

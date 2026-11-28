@@ -158,7 +158,12 @@
     "sentToSeller": "Sent to the admin and the seller: they decide.",
     "noteTeam": "You see the depot’s names. Each agent sees only their own errors.",
     "noteMine": "You see only your errors. Disagree? « Not me »: the admin decides.",
-    "preparedBy": "Prepared by {{who}}"
+    "preparedBy": "Prepared by {{who}}",
+    "errTitle_one": "Depot errors · {{count}} parcel",
+    "errTitle_other": "Depot errors · {{count}} parcels",
+    "noneP": "No error in this period.",
+    "chipNone": "No name",
+    "back": "Statistics"
   },
   "mine": {
     "title": "My errors",

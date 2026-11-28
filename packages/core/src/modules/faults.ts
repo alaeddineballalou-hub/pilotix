@@ -26,6 +26,7 @@ import {
   FAULT_SEEN,
   FAULT_TEAMS,
   faultOfCourierWords,
+  kfRange,
   type FaultMoment,
   type FaultReason,
   type FaultTeam,
@@ -424,6 +425,108 @@ async function ordersOf(db: Db, ids: number[]) {
 // ---------------------------------------------------------------- the procedures
 const Period = z.object({ from: dateStr, to: dateStr });
 
+// ---------------------------------------------------------------- Dépôt › Statistiques (the owner's design, 28 Nov 2026)
+// One page for the whole depot (the agreed PDF « Dépôt — Statistiques »): the orders that left it in the period, the
+// median time from reaching the depot to leaving it, the late ones (over 48 h, LATE_MS above), and the depot's errors —
+// the same lines as « Erreurs de livraison », found in the period — ÷ the orders sent, what they cost, by type, by
+// person. Who sees it: whoever sees the depot's names here (the administrators, the seller, an agency's chiefs, the
+// depot's managers of Management › Alertes dépôt). A tap opens « Erreurs de livraison » with the same filters.
+const PER = z.enum(['today', 'yesterday', '7', '30', 'month', 'custom']);
+const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** Statistiques' filters: the period (Algiers days, as Confirmation › Confirmées), who prepared, the product */
+const DepotIn = z.object({ per: PER.default('30'), from: DAY.optional(), to: DAY.optional(), agent: id.optional(), product: id.optional() });
+/** « Erreurs de livraison »: a period given as from / to, or Statistiques' (per); then a person, a product, a type */
+const DepotErrIn = z.object({
+  from: dateStr.optional(),
+  to: dateStr.optional(),
+  /** Statistiques' period; with « custom », `from` / `to` are its days */
+  per: PER.optional(),
+  agent: id.optional(),
+  product: id.optional(),
+  reason: reasonZ.optional(),
+  /** the depot's errors without a person (« Sans nom ») */
+  none: z.boolean().optional(),
+});
+
+/** [from, to) of a request: Statistiques' period, else the `from` / `to` given. */
+function bounds(ctx: Ctx, i: { per?: z.infer<typeof PER>; from?: string; to?: string }) {
+  if (i.per) {
+    const r = kfRange(ctx.now(), { per: i.per, from: i.from, to: i.to });
+    return { from: new Date(r.a).toISOString(), to: new Date(r.b).toISOString() };
+  }
+  if (!i.from || !i.to) throw bad('Choisissez une période');
+  return { from: i.from, to: i.to };
+}
+
+const msOf = (v: unknown) => (v ? new Date(v as string).getTime() : null);
+function median(xs: number[]) {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** The orders that left the depot in [from, to): when they reached it (their confirmation; for one confirmed without
+ *  stock, the moment the stock came back — that wait is not the depot's) and who prepared them (the last « Préparée »,
+ *  the pay's person). */
+async function sentOf(db: Db, from: string, to: string) {
+  const rows = await db.query(
+    `SELECT o.id, o.ref, o.customer_name, o.shipped_at,
+            GREATEST(o.confirmed_at, (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.from_value = 'no_stock' AND e.to_value = 'confirmed')) AS start,
+            (SELECT e.user_id FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'prepared' ORDER BY e.at DESC LIMIT 1) AS prep
+       FROM sales o WHERE o.shipped_at >= $1 AND o.shipped_at < $2`,
+    [from, to],
+  );
+  return rows.map((r: any) => {
+    const start = msOf(r.start);
+    const sent = msOf(r.shipped_at) ?? 0;
+    return { id: num(r.id), ref: String(r.ref), customer: String(r.customer_name ?? ''), start, sent, wait: start !== null && sent >= start ? sent - start : null, prep: r.prep ? num(r.prep) : null };
+  });
+}
+
+/** Each order's products (the « Produit » filter and its choices). */
+async function productsOf(db: Db, ids: number[]) {
+  const by = new Map<number, Set<number>>();
+  const names = new Map<number, string>();
+  if (!ids.length) return { by, names };
+  for (const r of await db.query('SELECT DISTINCT i.order_id, p.id, p.name FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = ANY($1)', [ids])) {
+    const o = num(r.order_id);
+    if (!by.has(o)) by.set(o, new Set());
+    by.get(o)!.add(num(r.id));
+    names.set(num(r.id), String(r.name));
+  }
+  return { by, names };
+}
+const productChoices = (names: Map<number, string>) => [...names.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+
+/** The depot's errors found in [from, to): the lines of « Erreurs de livraison », newest first. */
+async function depotFaults(db: Db, from: string, to: string) {
+  return (await db.query(`SELECT * FROM order_faults WHERE team = 'depot' AND at >= $1 AND at < $2 ORDER BY at DESC`, [from, to])).map(toRow);
+}
+
+/** The people of the « Agent » filter: the depot's, and whoever else prepared or made an error in the period. */
+async function depotPeople(db: Db, ids: number[]) {
+  return (await db.query(`SELECT id, name FROM profiles WHERE ('depot' = ANY(roles) AND active) OR id = ANY($1) ORDER BY lower(name)`, [ids])).map((r: any) => ({ id: num(r.id), name: String(r.name) }));
+}
+
+/** Statistiques and its « En retard » list: the period's orders sent and errors, with the filters applied. */
+async function depotData(ctx: Ctx, i: z.infer<typeof DepotIn>) {
+  const { from, to } = bounds(ctx, i);
+  await ensureFaults(ctx.db, await returnsOf(ctx, from, to));
+  const sent0 = await sentOf(ctx.db, from, to);
+  const faults0 = await depotFaults(ctx.db, from, to);
+  const prods = await productsOf(ctx.db, [...new Set([...sent0.map((o) => o.id), ...faults0.map((r) => r.order_id)])]);
+  const kept = (orderId: number) => !i.product || !!prods.by.get(orderId)?.has(i.product);
+  return {
+    sent: sent0.filter((o) => kept(o.id) && (!i.agent || o.prep === i.agent)),
+    faults: faults0.filter((r) => kept(r.order_id) && (!i.agent || r.person_id === i.agent)),
+    sent0,
+    faults0,
+    prods,
+  };
+}
+const late = (o: { wait: number | null }) => o.wait !== null && o.wait > LATE_MS;
+
 export const faultsProcs = {
   /** Commandes › Annulé › Retours: who is responsible for the parcels that came back in the period, team by team. */
   'faults.summary': proc(['confirmation', 'suivi', 'depot', 'agent_manager'], Period, async (ctx, i) => {
@@ -521,16 +624,23 @@ export const faultsProcs = {
 
   /** Dépôt › Erreurs de livraison: the depot's errors (the returns and the SAV after delivery). Its managers (and the
    *  chiefs) see the depot's names; a depot agent his own errors only. */
-  'faults.depot': proc(['depot'], Period, async (ctx, i) => {
+  'faults.depot': proc(['depot'], DepotErrIn, async (ctx, i) => {
     const s = await scopeOf(ctx);
     const boss = s.all || s.teams.has('depot');
-    await ensureFaults(ctx.db, await returnsOf(ctx, i.from, i.to));
-    const rows = (
-      await ctx.db.query(`SELECT * FROM order_faults WHERE team = 'depot' AND at >= $1 AND at < $2${boss ? '' : ' AND person_id = $3'} ORDER BY at DESC`, boss ? [i.from, i.to] : [i.from, i.to, s.me])
-    ).map(toRow);
+    const { from, to } = bounds(ctx, i);
+    await ensureFaults(ctx.db, await returnsOf(ctx, from, to));
+    // an agent: his own errors only; the depot's chiefs: a person (or « Sans nom »), a product, a type
+    const all = (await depotFaults(ctx.db, from, to)).filter((r) => boss || r.person_id === s.me);
+    const prods = await productsOf(ctx.db, all.map((r) => r.order_id));
+    const rows = all.filter(
+      (r) =>
+        (!i.product || !!prods.by.get(r.order_id)?.has(i.product)) &&
+        (!i.reason || r.reason === i.reason) &&
+        (!boss || ((!i.agent || r.person_id === i.agent) && (!i.none || r.person_id === null))),
+    );
     const names = await namesOf(ctx.db, rows.map((r) => r.person_id));
-    const orders = await ordersOf(ctx.db, rows.map((r) => r.order_id));
-    const handled = await handledBy(ctx.db, i.from, i.to);
+    const orders = await ordersOf(ctx.db, rows.slice(0, 300).map((r) => r.order_id));
+    const handled = await handledBy(ctx.db, from, to);
     const people = boss
       ? count(rows.map((r) => (r.person_id ? String(r.person_id) : ''))).filter(([k]) => k).map(([k, n]) => ({ name: names.get(Number(k)) ?? '—', n, of: handled('depot', Number(k)) || null }))
       : null;
@@ -543,7 +653,56 @@ export const faultsProcs = {
       reasons: count(rows.map((r) => r.reason)).map(([reason, n]) => ({ reason: reason as FaultReason, n })),
       people,
       mineRate: !boss && handled('depot', s.me) ? rows.length / handled('depot', s.me) : null,
-      list: rows.slice(0, 60).map((r) => ({ ...shown(s, r, names), order: orders.get(r.order_id) ?? null, contestNote: pending(r) && (boss || r.person_id === s.me) ? r.contest_note : null })),
+      // the filters' choices (the chiefs): the depot's people, the products of the period's errors
+      agents: boss ? await depotPeople(ctx.db, [...new Set(all.map((r) => r.person_id).filter((x): x is number => x !== null))]) : null,
+      products: boss ? productChoices(prods.names) : null,
+      list: rows.slice(0, 300).map((r) => ({ ...shown(s, r, names), order: orders.get(r.order_id) ?? null, contestNote: pending(r) && (boss || r.person_id === s.me) ? r.contest_note : null })),
+    };
+  }),
+
+  /** Does this person see Dépôt › Statistiques (its tab in the depot's bar)? The ones who see the depot's names. */
+  'depot.statsOn': proc(['depot'], z.object({}), async (ctx) => {
+    const s = await scopeOf(ctx);
+    return { on: s.all || s.teams.has('depot') };
+  }),
+
+  /** Dépôt › Statistiques: the cards, the errors by type, each person (« Sans nom »: the errors without a person, and
+   *  orders sent with nobody's « Préparée »). */
+  'depot.stats': proc(['depot'], DepotIn, async (ctx, i) => {
+    const s = await scopeOf(ctx);
+    if (!(s.all || s.teams.has('depot'))) throw forbidden();
+    const { sent, faults, sent0, faults0, prods } = await depotData(ctx, i);
+    const ids = [...new Set([...sent.map((o) => o.prep), ...faults.map((r) => r.person_id)])].filter((x): x is number => x !== null);
+    const names = await namesOf(ctx.db, ids);
+    const people = ids
+      .map((pid) => ({ id: pid, name: names.get(pid) ?? '—', prepared: sent.filter((o) => o.prep === pid).length, errors: faults.filter((r) => r.person_id === pid).length }))
+      .sort((a, b) => b.prepared - a.prepared || b.errors - a.errors || a.name.localeCompare(b.name));
+    const none = { prepared: sent.filter((o) => o.prep === null).length, errors: faults.filter((r) => r.person_id === null).length };
+    const everyone = [...new Set([...sent0.map((o) => o.prep), ...faults0.map((r) => r.person_id)])].filter((x): x is number => x !== null);
+    return {
+      sent: sent.length,
+      medianMs: median(sent.map((o) => o.wait).filter((x): x is number => x !== null)),
+      late: sent.filter(late).length,
+      errors: faults.length,
+      cost: sum(faults.map((r) => r.cost)),
+      reasons: count(faults.map((r) => r.reason)).map(([reason, n]) => ({ reason: reason as FaultReason, n })),
+      people,
+      none: none.prepared || none.errors ? none : null,
+      agents: await depotPeople(ctx.db, everyone),
+      products: productChoices(prods.names),
+    };
+  }),
+
+  /** « En retard »: the orders sent more than 48 h after reaching the depot, the slowest first. */
+  'depot.late': proc(['depot'], DepotIn, async (ctx, i) => {
+    const s = await scopeOf(ctx);
+    if (!(s.all || s.teams.has('depot'))) throw forbidden();
+    const { sent } = await depotData(ctx, i);
+    const rows = sent.filter(late).sort((a, b) => b.wait! - a.wait!);
+    const names = await namesOf(ctx.db, rows.map((o) => o.prep));
+    return {
+      total: rows.length,
+      rows: rows.slice(0, 300).map((o) => ({ orderId: o.id, ref: o.ref, customer: o.customer, start: new Date(o.start!).toISOString(), sent: new Date(o.sent).toISOString(), wait: o.wait!, by: o.prep ? names.get(o.prep) ?? null : null })),
     };
   }),
 

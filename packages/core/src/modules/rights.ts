@@ -272,6 +272,10 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'faults.summary': 'tab:commandes/annulees',
   'faults.forOrders': 'tab:commandes/annulees',
   'faults.depot': 'tab:depot/erreurs',
+  // Dépôt › Statistiques (its tab; the depot's managers only: faults.ts)
+  'depot.stats': 'tab:depot/stats',
+  'depot.late': 'tab:depot/stats',
+  'depot.statsOn': 'tab:depot/stats',
   // Confirmation's tabs (« Livrées » is Commandes' tab)
   'confirmation.list': (i) => (typeof i.sub === 'string' ? (i.sub === 'livrees' ? 'tab:commandes/livrees' : `tab:confirmation/${i.sub}`) : null),
   // Suivi

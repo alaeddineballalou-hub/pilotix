@@ -17,13 +17,31 @@ export function depotStage(sub: string | undefined): DepotStage {
   return (DEPOT_STAGES as readonly string[]).includes(sub ?? '') ? (sub as DepotStage) : 'preparer';
 }
 
+/** the tabs that are not steps of the parcels: after a line, without a count */
+const APART: DepotStage[] = ['erreurs', 'stats'];
+
 export type DepotStageCounts = Partial<Record<DepotStage, number>> & { prepAlerts?: number };
 
 /**
  * Each stage with what waits there (drawn here rather than with <StageBar>: it needs the ⟶ arrow and the red « end »
  * stage of the original). A phone shows two or three stages at a time: the current one is brought into view.
  */
-export function DepotStageBar({ stage, counts, phone, cfgOn = false, noErrors = false }: { stage: DepotStage; counts?: DepotStageCounts; phone?: boolean; cfgOn?: boolean; noErrors?: boolean }) {
+export function DepotStageBar({
+  stage,
+  counts,
+  phone,
+  cfgOn = false,
+  noErrors = false,
+  stats = false,
+}: {
+  stage: DepotStage;
+  counts?: DepotStageCounts;
+  phone?: boolean;
+  cfgOn?: boolean;
+  noErrors?: boolean;
+  /** « Statistiques »: the depot's managers, the administrators and the seller only (depot.statsOn) */
+  stats?: boolean;
+}) {
   const { t } = useTranslation();
   const bar = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -36,20 +54,21 @@ export function DepotStageBar({ stage, counts, phone, cfgOn = false, noErrors = 
     el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
     // again once the counts are there: they widen the stages before it (the last one, « Erreurs », left the screen)
   }, [stage, !!counts]);
+  const shown = DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs') && (k !== 'stats' || stats));
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
-      {DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs')).map((k, i) => (
+      {shown.map((k, i) => (
         <span key={k} style={{ display: 'contents' }}>
-          {/* « Erreurs de livraison » is not a step of the parcels: apart, after a line */}
-          {i > 0 && k === 'erreurs' && <span className="bjm-sep" aria-hidden="true" />}
-          {i > 0 && k !== 'erreurs' && (
+          {/* « Erreurs de livraison » and « Statistiques » are not steps of the parcels: apart, after a line */}
+          {i > 0 && APART.includes(k) && !(k === 'stats' && shown.includes('erreurs')) && <span className="bjm-sep" aria-hidden="true" />}
+          {i > 0 && !APART.includes(k) && (
             <span className={`bjm-ar ${k === 'retours' ? 'bjm-ar2' : ''}`} aria-hidden="true">
               {k === 'retours' ? '⟶' : '›'}
             </span>
           )}
           <a className={`bjm-p ${stage === k && !cfgOn ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
             <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
-            {counts && k !== 'erreurs' && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
+            {counts && !APART.includes(k) && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
           </a>
         </span>
       ))}
