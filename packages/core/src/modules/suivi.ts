@@ -16,7 +16,7 @@ import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
 import { demoClaimFound, demoClaimState } from '../couriers/demo';
 import { SUB_ERREUR } from '../couriers/alertstart';
-import { ACTED_KINDS_SQL, relivreSql, relivreurSql } from './alerttouch';
+import { actedAtSql, relivreSql, relivreurSql } from './alerttouch';
 import { tellGiven, tellTaken } from './inbox';
 import type { ClaimCategory, ClaimFound, ClaimMessage, ClaimSent, ClaimState, ParcelInfo, SwapSent } from '../couriers/types';
 import type { CourierKind } from '@pilotix/shared';
@@ -102,9 +102,9 @@ export async function alertClocks(db: Db, ids: number[], now: number): Promise<M
   const clock = (await getPrefs(db)).suiviClock;
   const rows = await db.query(
     `SELECT o.id, a.at AS alert_at,
-       -- someone acted on the alert: a call, a note, a treatment, a status, an edit (not a chat message or a bot's line)
-       (SELECT min(e.at) FROM order_events e WHERE e.order_id = o.id AND e.at > a.at AND e.user_id IS NOT NULL
-           AND e.kind IN ${ACTED_KINDS_SQL}) AS acted_at
+       -- someone really worked on the alert since it came: a call, a status, « Relivrer », a réclamation, a request to
+       -- the company (alerttouch.ts) — never a line Pilotix wrote in a person's name: then it is « En cours »
+       (SELECT min(x.at) FROM (${actedAtSql('o')}) x WHERE x.at > a.at) AS acted_at
        FROM orders o
        JOIN LATERAL (SELECT max(e.at) AS at FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') a ON true
       WHERE o.id = ANY($1) AND o.follow_status = 'alert'`,

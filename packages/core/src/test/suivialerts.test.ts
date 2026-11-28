@@ -370,22 +370,50 @@ test('Réclamations: 48 h for an answer, then « À relancer » for the agent wh
   assert.ok(l.counts.lost >= 1);
 });
 
-test('Alertes: « Nouvelles alertes » (nobody acted since it came) and « Alertes en cours » (someone called, wrote a note…)', async () => {
+test('Alertes: « Nouvelles alertes » (nobody worked on it since it came) and « Alertes en cours » (a call, a status, « Relivrer », a réclamation, a request)', async () => {
   const suivi = await as(EMAILS.suivi);
-  const o = (await db.query(`SELECT id FROM orders WHERE follow_status IN ('shipped','out_for_delivery') ORDER BY id LIMIT 1`))[0];
-  const id = Number(o.id);
-  await db.query(`UPDATE orders SET follow_status = 'alert' WHERE id = $1`, [id]);
-  await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) SELECT $1, NULL, 'follow_status', 'shipped', 'alert', coalesce(max(at), now()) + interval '1 minute' FROM order_events WHERE order_id = $1`, [id]);
+  const fresh = async () => {
+    const o = (await db.query(`SELECT id FROM orders WHERE follow_status IN ('shipped','out_for_delivery') ORDER BY id LIMIT 1`))[0];
+    const id = Number(o.id);
+    await db.query(`UPDATE orders SET follow_status = 'alert' WHERE id = $1`, [id]);
+    await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) SELECT $1, NULL, 'follow_status', 'shipped', 'alert', coalesce(max(at), now()) + interval '1 minute' FROM order_events WHERE order_id = $1`, [id]);
+    return id;
+  };
+  /** a line on the order one minute after its last one */
+  const line = (id: number, kind: string, note: string | null, data: unknown = null) =>
+    db.query(`INSERT INTO order_events (order_id, user_id, kind, note, data, at) SELECT $1, $2::bigint, $3, $4, $5::jsonb, max(at) + interval '1 minute' FROM order_events WHERE order_id = $1`, [
+      id,
+      suivi.session.profile.id,
+      kind,
+      note,
+      data === null ? null : JSON.stringify(data),
+    ]);
   const ids = async (tab: string) => ((await call('suivi.list', suivi, { tab, pageSize: 500 })) as any).rows.map((r: any) => r.id);
+  const id = await fresh();
   assert.ok((await ids('alertes_new')).includes(id));
   assert.ok(!(await ids('alertes_encours')).includes(id));
-  // someone acts on it (a note): it is in progress
-  await db.query(`INSERT INTO order_events (order_id, user_id, kind, to_value, at) SELECT $1, $2::bigint, 'note', 'Client appelé', max(at) + interval '1 minute' FROM order_events WHERE order_id = $1`, [id, suivi.session.profile.id]);
+  // lines Pilotix writes in a person's name are not work (the owner, 28 Nov 2026; PX1342 went « En cours » with 0 call)
+  await line(id, 'note', 'Équipe responsable : suivi');
+  await line(id, 'note', 'Rendue à la file : son agent ne travaille plus ici');
+  await line(id, 'note', 'Modification refusée par ZR : colis déjà enlevé');
+  await line(id, 'assign', null);
+  assert.ok((await ids('alertes_new')).includes(id), 'still a new alert: nobody worked on it');
+  assert.ok(!(await ids('alertes_encours')).includes(id));
+  // a call is work: it is in progress
+  await line(id, 'call', null);
   assert.ok(!(await ids('alertes_new')).includes(id));
   assert.ok((await ids('alertes_encours')).includes(id));
+  // a request sent to the company (a new try) is work too
+  const asked = await fresh();
+  await line(asked, 'note', 'Nouvelle tentative demandée à ZR', { acted: true });
+  assert.ok((await ids('alertes_encours')).includes(asked));
+  // and a réclamation a person opened
+  const claimed = await fresh();
+  await db.query(`INSERT INTO claims (order_id, reason, message, created_by, created_at) VALUES ($1, 'late', 'x', $2, now() + interval '1 hour')`, [claimed, suivi.session.profile.id]);
+  assert.ok((await ids('alertes_encours')).includes(claimed));
   const c: any = await call('suivi.counts', suivi, {});
   // the two lists hold every alert, nothing else (a relivrée parcel is back on the road: the owner, 25 Nov 2026)
-  assert.equal(c.alertes_new + c.alertes_encours, c.alertes);
+  assert.equal(c.alertes_new + c.alertes_encours + c.erreurs, c.alertes);
 });
 
 test('« Alerte suivante » for every seller (an agency, 27 Nov 2026): « alerts » asks for an alert only, never taking a Bloqué', async () => {

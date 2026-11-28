@@ -440,7 +440,8 @@ export const parcelsProcs = {
       if (i.action === 'note' && !i.text) throw bad('Écrivez la note');
       if (!isDemo(ctx)) await courier(ctx, i.action, { companyId: num(o.company_id), item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, text: i.text });
       const what = i.action === 'askReturn' ? 'Retour demandé' : i.action === 'retry' ? 'Nouvelle tentative demandée' : 'Note envoyée';
-      await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `${what} à ${o.company_name}${i.text ? ` : ${i.text}` : ''}`);
+      // a request to the company is real work on an alert (alerttouch.ts: « En cours »)
+      await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `${what} à ${o.company_name}${i.text ? ` : ${i.text}` : ''}`, { acted: true });
       ctx.emit({ type: 'order', id: num(o.id) });
       return { ok: true };
     }),
