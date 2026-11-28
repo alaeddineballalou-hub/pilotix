@@ -49,18 +49,25 @@ export function DepotStageBar({
   const gear = tabOn('depot', 'reglages');
   useLayoutEffect(() => {
     const el = bar.current;
-    const on = el?.querySelector<HTMLElement>('.bjm-p.on');
-    if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
-    const r = el.getBoundingClientRect();
-    const b = on.getBoundingClientRect();
-    // « Réglages » stays over the end of the bar (sticky), with a fade before it: what is under them is not seen
-    const cfg = el.querySelector<HTMLElement>('.bjm-cfg')?.getBoundingClientRect();
-    const rtl = getComputedStyle(el).direction === 'rtl';
-    const lo = cfg && rtl ? cfg.right + 44 : r.left + 8;
-    const hi = cfg && !rtl ? cfg.left - 44 : r.right - 8;
-    if (b.left >= lo && b.right <= hi) return;
-    el.scrollBy({ left: b.left + b.width / 2 - (lo + hi) / 2 });
-    // again once the counts are there: they widen the stages before it (the last one, « Erreurs », left the screen)
+    if (!el) return;
+    const show = () => {
+      const on = el.querySelector<HTMLElement>('.bjm-p.on');
+      if (!on || el.scrollWidth <= el.clientWidth + 1) return;
+      const r = el.getBoundingClientRect();
+      const b = on.getBoundingClientRect();
+      // « Réglages » stays over the end of the bar (sticky), with a fade before it: what is under them is not seen
+      const cfg = el.querySelector<HTMLElement>('.bjm-cfg')?.getBoundingClientRect();
+      const rtl = getComputedStyle(el).direction === 'rtl';
+      const lo = cfg && rtl ? cfg.right + 44 : r.left + 8;
+      const hi = cfg && !rtl ? cfg.left - 44 : r.right - 8;
+      if (b.left >= lo && b.right <= hi) return;
+      el.scrollBy({ left: b.left + b.width / 2 - (lo + hi) / 2 });
+    };
+    show();
+    // again when the tabs widen: the counts, the letters once loaded (the last one, « Statistiques », left the screen)
+    const ro = new ResizeObserver(() => show());
+    el.querySelectorAll('.bjm-p').forEach((x) => ro.observe(x));
+    return () => ro.disconnect();
   }, [stage, !!counts, stats, gear]);
   const shown = DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs') && (k !== 'stats' || stats));
   return (
