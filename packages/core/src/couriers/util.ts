@@ -331,6 +331,15 @@ function ourOne(name: string, ours: CommuneName[]): CommuneName | undefined {
 }
 
 /**
+ * Other names a company uses for one of our communes that none of the rules below finds: by wilaya, our official name →
+ * the company's names. The owner links them one by one (28 Nov 2026, PX1465: ZR writes « Maalma » for Mahelma, Alger:
+ * « just link this for now », the whole list is reviewed later).
+ */
+const OTHER_NAMES: Record<number, Record<string, string[]>> = {
+  16: { Mahelma: ['Maalma'] },
+};
+
+/**
  * The delivery company's commune for ours, found by Pilotix alone, for every company (22 Nov 2026, the owner: nobody
  * fixes a commune by hand). `list`: the company's communes of the wilaya; `wilayaId`: where (Pilotix's own list).
  *  1. the same name (« BAB-EZZOUAR » = « Bab Ezzouar »);
@@ -355,6 +364,10 @@ export function matchCommune<T extends CommuneName>(name: string, list: T[], wil
     const u = [...new Set(c)];
     return u.length === 1 && !other(u[0]) ? u[0] : null;
   };
+  // a name the owner linked by hand (OTHER_NAMES): the company's own spelling of this very commune
+  const linked = self && wilayaId ? (OTHER_NAMES[wilayaId]?.[self.name] ?? []) : [];
+  const link = linked.length ? list.find((x) => linked.some((n) => squash(n) === squash(x.name))) : undefined;
+  if (link) return link;
   if (!isArabic(want)) {
     const a = squash(want);
     const same = list.find((x) => squash(x.name) === a);
