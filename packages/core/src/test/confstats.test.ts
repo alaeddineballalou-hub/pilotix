@@ -138,8 +138,11 @@ test('Confirmées › Statistiques: taux (pending counted), the table adds up to
     const x = s.sum;
     assert.ok(x.qualified <= x.leads && x.confirmed <= x.qualified && x.upsell <= x.confirmed, `${who}: confirmed ⊂ qualified ⊂ leads`);
     assert.ok(x.delivered <= x.shipped && x.shipped <= x.confirmed, `${who}: delivered ⊂ shipped ⊂ confirmed`);
+    // « Annulées » and « En cours » (28 Nov 2026): every lead is confirmed, cancelled or still in progress
+    assert.equal(x.confirmed + x.cancelled + x.pending, x.leads, `${who}: confirmées + annulées + en cours = leads`);
+    for (const r of s.table) assert.equal(r.confirmed + r.cancelled + r.pending, r.leads, `${who}: a line adds up too (${r.key})`);
     // per agent (per team for the owner): every lead in one line, so the lines add up to the cards
-    for (const k of ['leads', 'qualified', 'confirmed', 'delivered'] as const)
+    for (const k of ['leads', 'qualified', 'confirmed', 'cancelled', 'pending', 'delivered'] as const)
       assert.equal(s.table.reduce((n: number, r: any) => n + r[k], 0), x[k], `${who}: the lines add up (${k})`);
     assert.equal(s.director, who === 'vendeur');
     const real = s.reasons.reduce((n: number, r: any) => n + r.n, 0);

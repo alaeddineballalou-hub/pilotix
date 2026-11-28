@@ -143,12 +143,15 @@ test('an agency’s chief and chefs d’équipe: Nouvelles, En cours and Confirm
   const cf: any = await call('confirmation.confirmees', every(chief), { ...KF });
   assert.equal(cf.bySeller, true);
   assert.deepEqual([cf.sum.leads, cf.sum.confirmed], [3, 2]);
+  // « Annulées » and « En cours » added up over the sellers too (28 Nov 2026)
+  assert.equal(cf.sum.confirmed + cf.sum.cancelled + cf.sum.pending, cf.sum.leads);
   assert.deepEqual(cf.table.filter((r: any) => r.kind !== 'none').map((r: any) => [r.name, r.leads, r.confirmed]).sort(), [['Nora', 2, 2], ['Rania', 1, 0]]);
   assert.deepEqual(cf.agents.map((a: any) => a.id).sort(), [noraAg.id, raniaAg.id].sort());
   assert.deepEqual([cf.perAgent.leads, cf.perAgent.agents], [3, 2]);
   const bySeller: any = await call('confirmation.confirmees', every(chief), { ...KF, by: 'seller' });
   assert.equal(bySeller.by, 'seller');
   assert.deepEqual(bySeller.table.map((r: any) => [r.name, r.id, r.leads]).sort(), [['Boutique Alger', alger.id, 1], ['Boutique Oran', oran.id, 2]]);
+  for (const r of bySeller.table) assert.equal(r.confirmed + r.cancelled + r.pending, r.leads, `${r.name}: a seller's line adds up`);
   const byProduct: any = await call('confirmation.confirmees', every(chief), { ...KF, by: 'product' });
   assert.deepEqual(byProduct.table.map((r: any) => r.name).sort(), ['Poussette · Boutique Oran', 'Vélo · Boutique Alger', 'Vélo · Boutique Oran']);
   assert.deepEqual(byProduct.products, [], 'a product is one seller’s: its filter needs one seller');

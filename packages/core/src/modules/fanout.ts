@@ -293,7 +293,7 @@ function loadOver(list: any[], orders: 'orders' | 'leads'): any {
 }
 const NV_SUM = ['received', 'called', 'under5', 'onTime', 'reached', 'converted'] as const;
 const EC_SUM = ['calls', 'onTime', 'confirmed', 'saidNo', 'never', 'tries'] as const;
-const CF_SUM = ['leads', 'qualified', 'confirmed', 'upsell', 'shipped', 'delivered'] as const;
+const CF_SUM = ['leads', 'qualified', 'confirmed', 'cancelled', 'pending', 'upsell', 'shipped', 'delivered'] as const;
 const sellerLine = (p: Part) => ({ key: `s${p.seller.id}`, id: p.seller.id, kind: 'seller' as const, name: p.seller.name });
 
 /** Nouvelles › Statistiques. */

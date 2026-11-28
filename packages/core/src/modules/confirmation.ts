@@ -1100,6 +1100,11 @@ export interface CfSum {
   /** not a fake, a competitor, a duplicate, a wrong number or a « never answered » (a pending order stays qualified) */
   qualified: number;
   confirmed: number;
+  /** cancelled at the confirmation, every reason (a real client's no, no answer, a fake, a duplicate, a wrong number):
+   *  Commandes › Annulé's words (CONF_DONE_BAD) — the owner's ask, 28 Nov 2026 */
+  cancelled: number;
+  /** not confirmed or cancelled yet: new, or between two calls (Tentative X) — leads = confirmed + cancelled + pending */
+  pending: number;
   /** confirmed with an upsell */
   upsell: number;
   /** confirmed and gone out of the depot (on the road counted), and delivered */
@@ -1132,7 +1137,8 @@ export const CfInput = KfInput.extend({
  * Confirmées › Statistiques, as the owner's sketch (27 Nov 2026, « Agent manager view — Confirmées »): are the leads good,
  * does the team confirm them, and do the confirmed orders end up delivered? Filters: the dates (by creation, or by the
  * day the CONFIRMATION status changed), an agent, a product — and, for the store's owner, a team or an agency. Every
- * number is a « taux » (pending orders counted). Cards: leads, qualified leads, confirmed, lead quality (qualified ÷
+ * number is a « taux » (pending orders counted). Cards: leads, qualified leads, confirmed, cancelled and in progress
+ * (« Annulées », « En cours »: the owner's ask, 28 Nov 2026 — the three add up to the leads), lead quality (qualified ÷
  * leads), taux conf. (confirmed ÷ qualified), upsell; why real clients said no (bad leads left out); a table per agent
  * (per team for the owner) or per product, with the delivery only there: taux livr. (delivered ÷ shipped) and taux
  * final (delivered ÷ qualified).
@@ -1189,6 +1195,9 @@ async function confirmeesStats(ctx: Ctx, i: z.infer<typeof CfInput>) {
       leads: xs.length,
       qualified: xs.filter((o) => o.lead === 'confirmed' || o.lead === 'refused' || o.lead === 'pending').length,
       confirmed: conf.length,
+      // a real client's no, an attack (fake, wrong number, no answer, competitor) or a duplicate: every cancelled status
+      cancelled: xs.filter((o) => o.lead === 'refused' || o.lead === 'attack' || o.lead === 'duplicate').length,
+      pending: xs.filter((o) => o.lead === 'pending').length,
       upsell: conf.filter((o) => o.up).length,
       shipped: conf.filter((o) => o.follow !== null && SHIPPED.includes(o.follow)).length,
       delivered: conf.filter((o) => o.follow !== null && OK.includes(o.follow)).length,

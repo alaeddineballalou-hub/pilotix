@@ -1326,8 +1326,9 @@ function OvWords() {
 /**
  * Confirmées › Statistiques, as the owner's sketch (27 Nov 2026, « Agent manager view — Confirmées » PDF): are the leads
  * good, does the team confirm them, and do the confirmed orders end up delivered? The filters (the dates — by creation
- * or by the day the confirmation status changed —, an agent, a product; for the store's owner a team or an agency), six
- * cards (the main one in navy: taux conf.), why real clients said no, then one table with the same filters: per agent
+ * or by the day the confirmation status changed —, an agent, a product; for the store's owner a team or an agency), the
+ * cards (the main one in navy: taux conf.; « Annulées » and « En cours » after « Confirmées » since 28 Nov 2026, the
+ * owner's ask: the three add up to the leads), why real clients said no, then one table with the same filters: per agent
  * (per team for the owner) or per product. Every number is a « taux »: pending orders counted.
  */
 interface CfF {
@@ -1442,6 +1443,9 @@ function CfBody({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => void
         {D.perAgent && <Tile label={t('confirmation.cfs.perAgent')} help={t('confirmation.cfs.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent.agents })} />}
         <Tile label={t('confirmation.cfs.qualified')} help={t('confirmation.cfs.hQualified')} value={n(S.qualified)} gl={t('confirmation.cfs.qualifiedSub')} />
         <Tile label={t('confirmation.cfs.confirmed')} help={t('confirmation.cfs.hConfirmed')} value={n(S.confirmed)} gl={t('confirmation.cfs.confirmedSub')} />
+        {/* where the other leads are (the owner's ask, 28 Nov 2026): leads = confirmées + annulées + en cours */}
+        <Tile label={t('confirmation.cfs.cancelled')} help={t('confirmation.cfs.hCancelled')} value={n(S.cancelled)} gl={t('confirmation.cfs.cancelledSub')} />
+        <Tile label={t('confirmation.cfs.pending')} help={t('confirmation.cfs.hPending')} value={n(S.pending)} gl={t('confirmation.cfs.pendingSub')} />
         <Tile label={t('confirmation.cfs.quality')} help={t('confirmation.cfs.hQuality')} value={pctTxt(cfQual(S))} gl={t('confirmation.cfs.qualitySub')} />
         <Tile main label={t('confirmation.cfs.taux')} help={t('confirmation.cfs.hTaux')} value={pctTxt(cfConf(S))} gl={t('confirmation.cfs.tauxSub')} />
         <Tile label={t('confirmation.cfs.upsell')} help={t('confirmation.cfs.hUpsell')} value={pctTxt(cfUp(S))} gl={t('confirmation.cfs.upsellSub')} />
@@ -1488,7 +1492,7 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
   // an agency's « Tous les vendeurs »: per seller too (a seller opens its own numbers)
   const sel = D.by === 'seller';
   const dir = (D.director && people) || sel;
-  const cols = [...(dir ? (['cAgents'] as const) : []), 'cLeads', ...(dir ? (['cPerAgent'] as const) : []), 'cQualified', 'cConfirmed', 'cQuality', 'cTaux', 'cUpsell', 'cLivr', 'cFinal'] as const;
+  const cols = [...(dir ? (['cAgents'] as const) : []), 'cLeads', ...(dir ? (['cPerAgent'] as const) : []), 'cQualified', 'cConfirmed', 'cCancelled', 'cPending', 'cQuality', 'cTaux', 'cUpsell', 'cLivr', 'cFinal'] as const;
   const head = (k: (typeof cols)[number]) => t(`confirmation.cfs.${k}`);
   const first = sel ? t('confirmation.nv.cSeller') : people ? t(D.director ? 'confirmation.nv.cTeam' : 'confirmation.nv.cAgent') : t('confirmation.cfs.cProduct');
   // red: under the team (the total line): lead quality 5 pts, upsell half, taux livr. 10 pts — a line with few leads is not judged
@@ -1512,6 +1516,8 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
       ...(dir ? [<td key="p" className="num ltr" data-l={head('cPerAgent')}>{per === null ? '—' : n(per)}</td>] : []),
       <td key="q" className="num ltr" data-l={head('cQualified')}>{n(r.qualified)}</td>,
       <td key="c" className="num ltr" data-l={head('cConfirmed')}>{n(r.confirmed)}</td>,
+      <td key="x" className="num ltr" data-l={head('cCancelled')}>{n(r.cancelled)}</td>,
+      <td key="e" className="num ltr" data-l={head('cPending')}>{n(r.pending)}</td>,
       <td key="lq" className={`num ltr${bad(q !== null && tq !== null && q <= tq - 5)}`} data-l={head('cQuality')}>{pctTxt(q)}</td>,
       <td key="t" className="num ltr" data-l={head('cTaux')}>{pctTxt(cfConf(r))}</td>,
       <td key="u" className={`num ltr${bad(u !== null && tu !== null && tu > 0 && u < tu / 2)}`} data-l={head('cUpsell')}>{pctTxt(u)}</td>,
