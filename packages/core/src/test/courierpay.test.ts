@@ -1,5 +1,6 @@
-// ZR payments: Pilotix asks for the payment when money is ready, imports each payment the company made (its parcels
-// marked « argent reçu », the versement's net = ZR's amount) into a caisse — once.
+// ZR payments: Pilotix never asks for the payment by itself (the owner, 28 Nov 2026: « Pilotix sends 0 request de
+// payment »), imports each payment the company made (its parcels marked « argent reçu », the versement's net = ZR's
+// amount) into a caisse — once.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
@@ -14,7 +15,7 @@ before(async () => {
 
 const bal = async (ctx: Ctx, caisse: string) => ((await call('caisse.view', ctx, { caisse })) as any).balance as number;
 
-test('the sync asks ZR for the payment and imports a paid statement into the caisse, once', async () => {
+test('the sync never asks ZR for a payment, even with money ready; it imports a paid statement into the caisse, once', async () => {
   const zr = Number((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'zr' LIMIT 1`))[0].id);
   await db.query(`UPDATE delivery_companies SET credentials = '{"api_key":"k","tenant":"t"}', active = true WHERE id = $1`, [zr]);
   const del = await db.query(`SELECT id, tracking FROM orders WHERE company_id = $1 AND follow_status = 'delivered' AND NOT cashed AND tracking IS NOT NULL ORDER BY id LIMIT 2`, [zr]);
@@ -42,18 +43,23 @@ test('the sync asks ZR for the payment and imports a paid statement into the cai
   const m0 = await bal(admin, 'main');
   const r: any = await call('caisse.paySync', admin, { companyId: zr });
   assert.equal(r.imported, 1);
-  assert.equal(r.requested, true);
+  assert.equal(r.requested, false, 'money ready (9 000 DA), no request waiting: still no request by itself');
+  assert.ok(!calls.includes('payRequest'));
   assert.equal(await bal(admin, 'main'), m0 + 12_345);
   const cashed = await db.query('SELECT id, follow_status, cashed FROM orders WHERE tracking = ANY($1)', [tracks]);
   assert.ok(cashed.every((o: any) => o.cashed && o.follow_status === 'delivered'));
   const v: any = await call('caisse.pay', admin, { companyId: zr });
   assert.equal(v.payments[0].inCaisse, true);
   assert.equal(v.payments[0].matched, tracks.length);
-  assert.equal(v.requests[0].auto, true);
-  // again: nothing imported twice, no second request while one waits
+  assert.equal(v.requests.length, 0);
+  assert.equal(v.cfg.auto, false);
+  // again: nothing imported twice, still no request; one asked by hand (« Demander le paiement ») is sent
   const r2: any = await call('caisse.paySync', admin, { companyId: zr });
   assert.equal(r2.imported, 0);
   assert.equal(r2.requested, false);
+  assert.ok(!calls.includes('payRequest'));
+  await call('caisse.payRequest', admin, { companyId: zr });
+  assert.equal(calls.filter((c) => c === 'payRequest').length, 1);
   assert.equal(await bal(admin, 'main'), m0 + 12_345);
   const lines: any = await call('caisse.payLines', admin, { id: v.payments[0].id });
   assert.ok(lines.every((l: any) => l.ref));
@@ -72,7 +78,8 @@ test('in the preview a ZR payment waits at the office; « Reçu » puts it in th
   await call('caisse.payReceive', admin, { id: wait.id, into: `u${karim.id}` });
   assert.equal(await bal(admin, `u${karim.id}`), k0 + wait.amount);
   await assert.rejects(call('caisse.payReceive', admin, { id: wait.id }), /déjà/);
-  await call('caisse.payConfig', admin, { companyId: zr, auto: false, into: 'bank' });
+  // an old screen asking for « auto »: not kept, Pilotix still never asks by itself
+  await call('caisse.payConfig', admin, { companyId: zr, auto: true, into: 'bank' });
   const v2: any = await call('caisse.pay', admin, { companyId: zr });
   assert.deepEqual(v2.cfg, { auto: false, into: 'bank' });
 });
