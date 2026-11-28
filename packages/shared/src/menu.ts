@@ -155,7 +155,7 @@ export const STORE_MENU: MenuItem[] = [
     children: [
       { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation'] },
       { id: 'depot', href: '#/depot', count: 'depot', tone: 'nc-a', icon: 'package', roles: ['depot'] },
-      { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation'], tabOf: 'suivi', tabsToo: ['bloques', 'livres'], plan: ['suivi', 'enlivraison'] },
+      { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation'], tabOf: 'suivi', tabsToo: ['bloques', 'livres', 'stats'], plan: ['suivi', 'enlivraison'] },
       { id: 'suivi', href: '#/suivi/alertes', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'confirmation'] },
       // the Community manager follows her orders (owner's yes, 25 Nov 2026): her Confirmées (where each one is in the
       // dépôt) and her parcels En livraison, read-only — Commandes' tabs, the work pages stay the agents'

@@ -214,7 +214,7 @@ export const AGENCY_NAV: NavItem[] = [
       // no claim, no swap; a suivi agent: En livraison → Annulé, no Confirmation; both: everything
       // (and swapped to another customer); the claims with the companies are in Alertes
       { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation', 'agent_manager'] },
-      { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['enlivraison', 'bloques'] } },
+      { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['enlivraison', 'bloques', 'stats'] } },
       { id: 'alertes', href: '#/suivi/alertes_new', count: 'suivi', tone: 'nc-a', icon: 'alert', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['alertes', 'alertes_new', 'alertes_encours', 'traites', 'reclamation'] } },
       // Livré, Annulé, Toutes les commandes: the store's own screens (Commandes), the agency's orders only — each agent
       // his own, its chiefs all of them (owner's choice, 24 Nov 2026: the same screens everywhere)
