@@ -153,7 +153,7 @@
    the end of the bar and always in view, even when the steps and « Erreurs de livraison » slide under them; their names
    stay as tooltips and for screen readers */
 .bjm-bar .bjm-end { flex: none; display: flex; align-items: center; gap: 6px; margin-inline-start: auto; position: sticky; inset-inline-end: 0; z-index: 3; background: var(--surface); }
-.bjm-bar[data-fade~="e"] .bjm-end::before { content: ''; position: absolute; top: -7px; bottom: -7px; inset-inline-end: calc(100% + 1px); width: 44px; pointer-events: none; background: linear-gradient(270deg, var(--surface) 25%, transparent); }
+.bjm-bar[data-fade~="e"] .bjm-end::before { content: ''; position: absolute; top: -7px; bottom: -7px; inset-inline-end: 100%; width: 44px; pointer-events: none; background: linear-gradient(270deg, var(--surface) 25%, transparent); }
 [dir="rtl"] .bjm-bar[data-fade~="e"] .bjm-end::before { background: linear-gradient(90deg, var(--surface) 25%, transparent); }
 /* in the pair, the gear is no longer pinned on its own (ux.css) and the fade is the pair's */
 .bjm-bar .bjm-end .bjm-p.bjm-cfg { position: static; margin-inline-start: 0; }
