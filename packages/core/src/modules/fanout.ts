@@ -407,6 +407,8 @@ export const FANOUT: Record<string, Fan> = {
   'confirmation.counts': sum,
   'confirmation.mine': sum,
   'suivi.counts': sum,
+  'suivi.statsOn': { merge: (parts) => ({on:parts.some(p=>p.out?.on===true)}) },
+  'suivi.stats': { merge: (parts) => ({rows:parts.flatMap(p=>(p.out?.rows??[]).map((r:any)=>({...r,product:{key:p.seller.id+':'+r.product.key,name:r.product.name+' · '+p.seller.name},company:{key:p.seller.id+':'+r.company.key,name:r.company.name+' · '+p.seller.name},team:{key:p.seller.id+':'+r.team.key,name:r.team.name+' · '+p.seller.name}})))}) },
   'sav.kpis': {
     merge: (parts) => ({ ...sumDeep(parts.map((p) => p.out)), avgMs: null }),
   },
