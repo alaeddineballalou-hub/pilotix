@@ -88,7 +88,7 @@ function SuiviOne({ sub: asked0 }: PageProps) {
   const sub = asked0?.replace(/-/g, '_');
   const agency = useInAgency();
   const { has } = useSession();
-  if (sub === 'stats') return <><SuiviBar tab="alertes_new" statsActive /><DeliveryStats /></>;
+  if (sub === 'stats') return <><SuiviBar tab="enlivraison" statsActive /><DeliveryStats /></>;
   // « Messages » left Suivi (the owner, 25 Nov 2026): it is Pilot Automations › Messages; the old address opens it
   if (sub === 'messages' && !agency) return <GoTo href="#/notify/messages" />;
   // « Réglages »: every setting of Suivi (a store's own; an agency has its own settings page)
@@ -157,7 +157,8 @@ function SuiviBar({ tab, cfgOn = false, statsActive = false }: { tab: Sub; cfgOn
   // administrator, or a person allowed to share the alerts (« Affectation »); a store's, not an agency's
   const cfg = !agency && tabOn('suivi', 'reglages') && (!!session?.isAdmin || !!session?.profile.canAffect);
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
-  const stats = useRpc('suivi.statsOn', {}, {enabled: tabOn('suivi','stats'), retry:false, staleTime:300000}).data?.on;
+  const deliveryTab = tab === 'enlivraison' || tab === 'bloques';
+  const stats = useRpc('suivi.statsOn', {}, { enabled: deliveryTab && tabOn('suivi', 'stats'), retry: false, staleTime: 300000 }).data?.on;
   const chart = stats && <a className={`bjm-p bjm-ico${statsActive ? ' on' : ''}`} href="#/suivi/stats" aria-label={t('suivi.tabs.stats')} title={t('suivi.tabs.stats')} aria-current={statsActive?'page':undefined}><Icon name="chart"/></a>;
   // a phone shows a few steps at a time: the current one is brought into view
   const bar = useRef<HTMLElement>(null);
@@ -177,7 +178,7 @@ function SuiviBar({ tab, cfgOn = false, statsActive = false }: { tab: Sub; cfgOn
   const active = (k: Sub) => !cfgOn && !statsActive && (tab === k || (k === 'alertes' && ['alertes_new', 'alertes_encours', 'erreurs', 'resolus', 'reclamation', 'annules', 'swap'].includes(tab)));
   // (a tab taken from the role in Utilisateurs › Rôles is not drawn)
   const item = (k: Sub, count?: number, x = false, label?: string) => !tabOn('suivi', k) ? null : (
-    <a className={`bjm-p ${active(k) ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : active(k) ? 'location' : undefined}>
+    <a className={`bjm-p ${active(k) ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={active(k) ? tab === k ? 'page' : 'location' : undefined}>
       <span className="bjm-l">{label ?? t(agency && k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`)}</span>
       {count !== undefined && <b className="bjm-n ltr">{count}</b>}
     </a>
@@ -214,7 +215,7 @@ function SuiviBar({ tab, cfgOn = false, statsActive = false }: { tab: Sub; cfgOn
         ) : (
           item(tab, c?.livres ?? 0)
         )}
-        {chart && <span className="bjm-end">{chart}</span>}
+        {deliveryTab && chart && <span className="bjm-end">{chart}</span>}
       </nav>
     );
   }
@@ -227,7 +228,7 @@ function SuiviBar({ tab, cfgOn = false, statsActive = false }: { tab: Sub; cfgOn
   // The owner (25 Nov 2026): the menu's « Suivi » shows only the alerts, the swaps and the réclamations; the menu's « En
   // livraison » everything about the delivery. One row each, never mixed. (« Traités » became En cours › Attend ZR and
   // Résolu; « Messages » is Pilot Automations › Messages: their addresses still open.)
-  if (inAlertBar(tab) || cfgOn || statsActive)
+  if (inAlertBar(tab) || cfgOn)
     return (
       <nav ref={bar} className="bjm-bar flow" aria-label={t('suivi.tabs.alertes')} data-g="suivi-alertes">
         {item('alertes_new', c?.alertes_new ?? 0, false, t('suivi.clair.tab.alertes_new'))}
@@ -238,10 +239,16 @@ function SuiviBar({ tab, cfgOn = false, statsActive = false }: { tab: Sub; cfgOn
         {item('annules', c?.annulesClair ?? 0, false, t('suivi.clair.tab.annules'))}
         {(has('suivi') || has('confirmation')) && item('reclamation', c?.claims, true, t('suivi.clair.tab.reclamation'))}
         {/* « Réglages »: apart at the end, with a gear (Utilisateurs › Rôles: the owners and the agent managers by default) */}
-        {(chart || gear) && <span className="bjm-end">{chart}{gear}</span>}
+        {gear && <span className="bjm-end">{gear}</span>}
       </nav>
     );
-  // the menu « En livraison » (and a store's other delivery lists): no Suivi tab row
+  if (deliveryTab && (chart || statsActive))
+    return (
+      <nav ref={bar} className="bjm-bar flow" aria-label={t('suivi.tabs.enlivraison')} data-g="suivi-livraison">
+        {item('enlivraison')}
+        {chart && <span className="bjm-end">{chart}</span>}
+      </nav>
+    );
   return null;
 }
 

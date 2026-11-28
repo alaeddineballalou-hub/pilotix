@@ -244,11 +244,18 @@ export function AllSuivi({ sub, scope }: PageProps & { scope?: AllScope }) {
   const asked: Tab = TABS.includes(sub_ as Tab) ? (sub_ as Tab) : 'enlivraison';
   const tab: Tab = !has('suivi') && !['enlivraison', 'livres', 'annules'].includes(asked) ? 'enlivraison' : asked;
   const c = useRpc('suivi.counts', (scope?.counts ?? {}) as never, { refetchInterval: 60_000 }).data;
-  const stats = useRpc('suivi.statsOn', (scope?.counts ?? {}) as never, {retry:false,staleTime:300000}).data?.on;
+  const statsActive = sub === 'stats';
+  const deliveryTab = tab === 'enlivraison';
+  const stats = useRpc('suivi.statsOn', (scope?.counts ?? {}) as never, { enabled: deliveryTab, retry: false, staleTime: 300000 }).data?.on;
   return (
     <>
-      <div style={{display:'flex',alignItems:'center',gap:6}}><div style={{flex:1,minWidth:0}}><StageBar flow={false} items={(scope?.tabs ?? stepLinks(tab)).map((k) => ({ key: k, label: t(k === 'traites' && !scope ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k as Tab] }))} current={sub==='stats'?'stats':tab === 'alertes' ? 'alertes_new' : tab} /></div>{stats&&<a className={`btn small${sub==='stats'?' primary':''}`} href="#/suivi/stats" title={t('suivi.tabs.stats')} aria-label={t('suivi.tabs.stats')}><Icon name="chart"/></a>}</div>
-      {sub==='stats' ? <DeliveryStats scope={scope?.counts}/> : tab === 'annules' ? (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <StageBar flow={false} items={(scope?.tabs ?? stepLinks(tab)).map((k) => ({ key: k, label: t(k === 'traites' && !scope ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k as Tab] }))} current={statsActive ? 'stats' : tab === 'alertes' ? 'alertes_new' : tab} />
+        </div>
+        {deliveryTab && stats && <a className={`btn small${statsActive ? ' primary' : ''}`} href="#/suivi/stats" title={t('suivi.tabs.stats')} aria-label={t('suivi.tabs.stats')} aria-current={statsActive ? 'page' : undefined}><Icon name="chart" /></a>}
+      </div>
+      {statsActive ? <DeliveryStats scope={scope?.counts} /> : tab === 'annules' ? (
         // « Annulé » is the same screen everywhere (owner's choice, 24 Nov 2026), on its returns
         <DoneScreen sub="annulees" start="back" />
       ) : !scope && (tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours') ? (

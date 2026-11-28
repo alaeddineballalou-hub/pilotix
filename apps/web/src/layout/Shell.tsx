@@ -384,7 +384,7 @@ function WorkspaceShell({ page, sub, children, nav = NAV, space = 'store' }: She
             Pilotix
           </a>
           <span id="page-title" className="page-title">
-            {partner ? label(page) : page === 'livraison' && sub === 'livreurs' ? t('nav.sub.livreurs') : t(`nav.${page}`, { defaultValue: '' })}
+            {page === 'suivi' && sub === 'stats' ? t('nav.sub.enlivraison') : partner ? label(page) : page === 'livraison' && sub === 'livreurs' ? t('nav.sub.livreurs') : t(`nav.${page}`, { defaultValue: '' })}
           </span>
           {/* the backup door: a chip while Pilotix is opened through it (lib/door) */}
           <DoorChip />
