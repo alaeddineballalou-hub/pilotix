@@ -1447,7 +1447,10 @@ function countBuckets(tab: ClairTab, rows: Order[], cx: Record<number, ClairExtr
   return out;
 }
 
+import { deliveryStatsProcs } from './deliveryStats';
+
 export const suiviProcs = {
+  ...deliveryStatsProcs,
   'suivi.counts': proc(['suivi', 'confirmation'], z.object({}), (ctx) => suiviCounts(ctx)),
 
   'suivi.list': proc(['suivi', 'confirmation'], ListSuivi, async (ctx, i) => {
