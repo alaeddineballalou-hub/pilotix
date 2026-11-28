@@ -1,0 +1,11 @@
+/* Only layout additions; tiles, filters and table reuse Confirmation/Dépôt styles. */
+.px-liv-grid{display:grid;gap:8px;margin-bottom:8px}
+.px-liv-grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.px-liv-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.px-liv-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.px-liv-bar{display:flex;overflow:hidden;border-radius:999px;height:14px;margin:12px 0 8px;background:var(--raise)}
+.px-liv-legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.px-liv-legend span{display:inline-flex;gap:5px;align-items:center}
+.px-liv-legend i{width:9px;height:9px;border-radius:2px}
+.px-liv-table{min-width:1050px}
+@media(max-width:760px){.px-liv-grid.four,.px-liv-grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}.px-liv-table{min-width:0}}
