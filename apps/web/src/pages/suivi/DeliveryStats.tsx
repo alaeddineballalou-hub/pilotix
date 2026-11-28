@@ -36,13 +36,13 @@ const columns=[
 ];
 const labels:Record<Group,string>={product:'Produit',company:'Société',team:'Équipe'};
 const groups:Group[]=['product','company','team'];
-export function DeliveryStats(){
+export function DeliveryStats({scope}:{scope?:Record<string,unknown>}={}){
   const [kf,setKf]=useState<Kf>({per:'30',basis:'created',from:algToday(),to:algToday(),view:'deliv'});
   const [group,setGroup]=useState<Group>('product');
   const [filters,setFilters]=useState<Record<Group,string>>({product:'',company:'',team:''});
   const [sort,setSort]=useState('sent');
   const [asc,setAsc]=useState(false);
-  const q=useRpc('suivi.stats',{per:kf.per,from:kf.from,to:kf.to},{refetchInterval:120000,placeholderData:undefined});
+  const q=useRpc('suivi.stats',{...scope,per:kf.per,from:kf.from,to:kf.to},{refetchInterval:120000,placeholderData:undefined});
   const raw:Row[]=q.data?.rows??[];
   const choices=(g:Group)=>[...new Map(raw.map(r=>[r[g].key,r[g]])).values()].sort((a,b)=>a.name.localeCompare(b.name));
   const rows=raw.filter(r=>groups.every(g=>!filters[g]||filters[g]===r[g].key));
