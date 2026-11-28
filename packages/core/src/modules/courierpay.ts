@@ -1,5 +1,5 @@
-// Courier payments (ZR first): Pilotix asks the company to pay as soon as it holds money ready for us (« demande de
-// paiement »), and every payment the company makes is imported by itself — its details (parcels delivered / cancelled,
+// Courier payments (ZR first): « Demander le paiement » asks the company to pay (by hand; by itself only when the shop
+// switches it on, see PayCfg), and every payment the company makes is imported by itself — its details (parcels delivered / cancelled,
 // refunds, labeling, office holding, storage) and its parcels — as one versement into a caisse: the parcels it pays are
 // marked « argent reçu », and the versement's net is the company's own amount. Runs with the courier sync (every 30 min).
 // A payment the company has not handed over yet waits as « à récupérer »: « Reçu » confirms it at ZR and imports it.
@@ -16,18 +16,30 @@ import { applyPayFees } from './courierfees';
 const isDemo = (ctx: Ctx) => !ctx.server;
 const sys = (ctx: Ctx): Ctx => ({ ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'admin'], isAdmin: true } });
 const parse = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? {});
-/** Tomorrow in Algiers (ZR wants a date ≥ tomorrow). */
-const tomorrow = (now: number) => new Date(now + 3_600_000 + 86_400_000).toISOString().slice(0, 10);
+/**
+ * The first day ZR pays on (its rule, the owner, 28 Nov 2026): asked before 14:00 (Algiers), the next day; from 14:00,
+ * the day after. ZR refuses an earlier date (« RequestedDateMustBeInFuture »: 95 refusals for « tomorrow » on 27 Nov).
+ */
+export function firstPayDay(now: number) {
+  const alg = new Date(now + 3_600_000); // Algiers is UTC+1 all year
+  const days = alg.getUTCHours() < 14 ? 1 : 2;
+  return { date: new Date(alg.getTime() + days * 86_400_000).toISOString().slice(0, 10), days };
+}
+const firstDay = (now: number) => firstPayDay(now).date;
 
 export interface PayCfg {
-  /** ask for the payment by itself (default on) */
+  /**
+   * Pilotix asks for the payment by itself (the 30-minute sync, when money is ready). Off unless the shop switches it on
+   * (the owner, 28 Nov 2026: « I want to cash out alone »): stored as « autoAsk », so the old « auto » (on by default)
+   * no longer counts and every shop starts off.
+   */
   auto: boolean;
   /** caisse the payments go into */
   into: string;
 }
 const cfgOf = (config: unknown): PayCfg => {
   const p = (parse(config) as any).pay ?? {};
-  return { auto: p.auto !== false, into: typeof p.into === 'string' && CAISSE_KEY_RE.test(p.into) ? p.into : 'main' };
+  return { auto: p.autoAsk === true, into: typeof p.into === 'string' && CAISSE_KEY_RE.test(p.into) ? p.into : 'main' };
 };
 
 async function company(ctx: Ctx, id: number) {
@@ -43,7 +55,7 @@ export const paySupported = (ctx: Ctx, c: { kind: string; hasKeys: boolean; acti
 const courier = (ctx: Ctx, action: string, args: Record<string, unknown>) => ctx.server!.courier(action, args, ctx);
 
 // ---------------------------------------------------------------- browser preview: a ZR that pays
-async function demoRun(ctx: Ctx, c: Company) {
+async function demoRun(ctx: Ctx, c: Company, ask: boolean) {
   const del = await ctx.db.query(
     `SELECT o.id, o.tracking, o.customer_name, o.total, o.delivered_at FROM orders o
      WHERE o.company_id = $1 AND o.follow_status = 'delivered' AND NOT o.cashed AND o.tracking IS NOT NULL
@@ -70,8 +82,8 @@ async function demoRun(ctx: Ctx, c: Company) {
     );
   }
   await saveBalance(ctx, c.id, { paid: num((await ctx.db.query('SELECT COALESCE(sum(amount),0) AS v FROM courier_payments WHERE company_id = $1 AND done', [c.id]))[0].v), ready: sum(pay), delivered: sum(del), notReady: sum(later) });
-  if (c.cfg.auto && sum(pay) > 0 && !(await pendingRequest(ctx, c.id))) {
-    await ctx.db.query('INSERT INTO courier_pay_requests (company_id, ext_id, date, at, auto) VALUES ($1,$2,$3,now(),true) ON CONFLICT DO NOTHING', [c.id, `demo-req-${ctx.now()}`, tomorrow(ctx.now())]);
+  if (ask && c.cfg.auto && sum(pay) > 0 && !(await pendingRequest(ctx, c.id))) {
+    await ctx.db.query('INSERT INTO courier_pay_requests (company_id, ext_id, date, at, auto) VALUES ($1,$2,$3,now(),true) ON CONFLICT DO NOTHING', [c.id, `demo-req-${ctx.now()}`, firstDay(ctx.now())]);
     return { requested: true };
   }
   return { requested: false };
@@ -88,13 +100,17 @@ async function saveBalance(ctx: Ctx, companyId: number, b: PayBalance, error: st
 const pendingRequest = async (ctx: Ctx, companyId: number) =>
   (await ctx.db.query(`SELECT id FROM courier_pay_requests WHERE company_id = $1 AND approved IS NULL AND (date IS NULL OR date >= (now() AT TIME ZONE 'Africa/Algiers')::date - 3) LIMIT 1`, [companyId]))[0];
 
-/** One company: balance, requests, payments (new ones imported), and a payment request when money is ready. */
-export async function payRun(ctx: Ctx, companyId: number) {
+/**
+ * One company: balance, requests, payments (new ones imported), and a payment request when money is ready: only from the
+ * 30-minute sync, and only when the shop switched it on. « Actualiser » (↻) never asks (the owner, 28 Nov 2026).
+ */
+export async function payRun(ctx: Ctx, companyId: number, opt: { ask?: boolean } = {}) {
+  const ask = opt.ask !== false;
   const c = await company(ctx, companyId);
   if (!paySupported(ctx, c)) return { company: c.name, imported: 0, requested: false };
   let imported = 0;
   if (isDemo(ctx)) {
-    const r = await demoRun(ctx, c);
+    const r = await demoRun(ctx, c, ask);
     return { company: c.name, imported, requested: r.requested };
   }
   let bal: PayBalance;
@@ -145,8 +161,8 @@ export async function payRun(ctx: Ctx, companyId: number) {
   }
   let requested = false;
   const pending = reqs.some((r) => r.approved === null);
-  if (c.cfg.auto && bal.ready > 0 && !pending) {
-    const date = tomorrow(ctx.now());
+  if (ask && c.cfg.auto && bal.ready > 0 && !pending) {
+    const date = firstDay(ctx.now());
     const r = (await courier(ctx, 'payRequest', { companyId, date })) as { extId: string };
     await ctx.db.query('INSERT INTO courier_pay_requests (company_id, ext_id, date, at, auto) VALUES ($1,$2,$3,now(),true) ON CONFLICT DO NOTHING', [companyId, r.extId, date]);
     requested = true;
@@ -280,11 +296,15 @@ export const courierPayProcs = {
     );
     const names = new Map<string, string | null>();
     for (const p of pays) if (p.caisse && !names.has(p.caisse)) names.set(p.caisse, await caisseLabel(ctx, p.caisse));
+    const first = firstPayDay(ctx.now());
     return {
       supported: true as const,
       name: c.name,
       cfg: c.cfg,
       cfgName: await caisseLabel(ctx, c.cfg.into),
+      /** the first day ZR pays on if asked now (« Pour demain » before 14:00, « Pour après-demain » from 14:00) */
+      firstDay: first.date,
+      firstIn: first.days,
       balance: b ? { paid: num(b.paid), ready: num(b.ready), delivered: num(b.delivered), notReady: num(b.not_ready), at: iso(b.at), error: (b.error ?? null) as string | null } : null,
       requests: reqs.map((r: any) => ({ id: num(r.id), date: r.date ? String(iso(r.date)).slice(0, 10) : null, approved: r.approved === null || r.approved === undefined ? null : !!r.approved, comment: (r.comment ?? null) as string | null, at: isoOrNull(r.at ?? r.created_at), auto: !!r.auto })),
       payments: pays.map((p: any) => ({
@@ -307,26 +327,28 @@ export const courierPayProcs = {
     };
   }),
 
-  /** Refresh now (also runs every 30 minutes with the courier sync). */
-  'caisse.paySync': proc([], z.object({ companyId: id }), async (ctx, i) => payRun(ctx, i.companyId)),
+  /** « Actualiser » (↻): reads the company again (balance, requests, payments) and never asks for a payment, even when
+   *  the shop switched the automatic request on: only the 30-minute sync does that (the owner, 28 Nov 2026). */
+  'caisse.paySync': proc([], z.object({ companyId: id }), async (ctx, i) => payRun(ctx, i.companyId, { ask: false })),
 
-  /** « Demander le paiement » by hand (ZR: date ≥ tomorrow). */
+  /** « Demander le paiement » by hand (ZR: before 14:00 for the next day, from 14:00 for the day after). */
   'caisse.payRequest': proc([], z.object({ companyId: id, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }), async (ctx, i) => {
     const c = await company(ctx, i.companyId);
     if (!paySupported(ctx, c)) throw bad(`${c.name} : pas de demande de paiement par API`);
-    const date = i.date && i.date >= tomorrow(ctx.now()) ? i.date : tomorrow(ctx.now());
+    const first = firstDay(ctx.now());
+    const date = i.date && i.date >= first ? i.date : first;
     if (await pendingRequest(ctx, c.id)) throw bad('Une demande de paiement est déjà en attente');
     const extId = isDemo(ctx) ? `demo-req-${ctx.now()}` : ((await courier(ctx, 'payRequest', { companyId: c.id, date })) as { extId: string }).extId;
     await ctx.db.query('INSERT INTO courier_pay_requests (company_id, ext_id, date, at) VALUES ($1,$2,$3,now())', [c.id, extId, date]);
     return { ok: true, date };
   }),
 
-  /** A payment request still waiting: another date (ZR: ≥ tomorrow), at the courier too. */
+  /** A payment request still waiting: another date (ZR's first day or later), at the courier too. */
   'caisse.payRequestDate': proc([], z.object({ id, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }), async (ctx, i) => {
     const r = (await ctx.db.query('SELECT * FROM courier_pay_requests WHERE id = $1', [i.id]))[0];
     if (!r) throw notFound('Demande introuvable');
     if (r.approved !== null && r.approved !== undefined) throw bad('La société a déjà répondu à cette demande');
-    if (i.date < tomorrow(ctx.now())) throw bad('La date doit être demain ou plus tard');
+    if (i.date < firstDay(ctx.now())) throw bad('Trop tôt pour ZR : avant 14 h, demain au plus tôt ; après 14 h, après-demain au plus tôt');
     if (!isDemo(ctx)) await courier(ctx, 'payRequestDate', { companyId: num(r.company_id), extId: r.ext_id, date: i.date });
     await ctx.db.query('UPDATE courier_pay_requests SET date = $2 WHERE id = $1', [r.id, i.date]);
     return { ok: true, date: i.date };
@@ -377,7 +399,8 @@ export const courierPayProcs = {
   /** Ask by itself + the caisse the payments go into. */
   'caisse.payConfig': proc([], z.object({ companyId: id, auto: z.boolean(), into: CaisseKey }), async (ctx, i) => {
     await checkCaisse(ctx.db, i.into);
-    await ctx.db.query(`UPDATE delivery_companies SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{pay}', $2::jsonb) WHERE id = $1`, [i.companyId, JSON.stringify({ auto: i.auto, into: i.into })]);
+    // « autoAsk », not « auto »: see PayCfg (the old key, on by default, no longer counts)
+    await ctx.db.query(`UPDATE delivery_companies SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{pay}', $2::jsonb) WHERE id = $1`, [i.companyId, JSON.stringify({ autoAsk: i.auto, into: i.into })]);
     return { ok: true };
   }),
 };

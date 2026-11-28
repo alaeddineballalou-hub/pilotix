@@ -196,7 +196,8 @@ async function loadClaimCats(c: CourierCompany): Promise<ClaimCategory[]> {
 }
 
 // Payments (ZR "treasury", from ZR's API documentation): GET /supplier-payment/supplier-balance, POST /payment-request
-// {requestedDate ≥ tomorrow}, POST /payment-request/search {onlyPending}, POST /supplier-payment/search → payments with their
+// {requestedDate: asked before 14:00 Algiers ≥ tomorrow, from 14:00 ≥ the day after (ZR's rule, courierpay.ts › firstPayDay)},
+// POST /payment-request/search {onlyPending}, POST /supplier-payment/search → payments with their
 // totals (parcels delivered / cancelled, refunds, labeling, office holding, storage) and acceptedAt, PUT /supplier-payment/{id}
 // (we received it), POST /treasury-transactions/search/supplier-payment/by-supplier-payment/{id} → one line per parcel.
 const numOf = (v: unknown) => Math.round(Number(v) || 0);

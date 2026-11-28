@@ -715,21 +715,22 @@ export function MyCash() {
 
 // ---------------------------------------------------------------- ZR on the Caisse home: its totals and one tap to ask
 /** What the company says it holds for us (Livré · Prêt à payer · Pas encore prêt · Déjà payé) and « Demander le paiement »
- * in one tap (for tomorrow; another date if needed). A payment ready to collect shows here too, with « Reçu ». */
+ * in one tap (for ZR's first day: tomorrow before 14:00, the day after from 14:00; another date if needed). A payment
+ * ready to collect shows here too, with « Reçu ». ↻ only reads ZR again: it never asks for a payment. */
 function QuickPay({ companyId, kind, onOpen, full }: { companyId: number; kind: string; onOpen?: () => void; full?: boolean }) {
   const { t } = useTranslation();
   const q = useRpc('caisse.pay', { companyId });
   const sync = useAction('caisse.paySync', { success: (r) => (r.imported ? t('caisse.pay.imported', { count: r.imported }) : r.requested ? t('caisse.pay.requestedNow') : t('caisse.pay.upToDate')) });
   const ask = useAction('caisse.payRequest', { success: (r) => t('caisse.pay.requestSent', { d: dateOnly(r.date) }) });
   const [other, setOther] = useState(false);
-  const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-  const [date, setDate] = useState(min);
+  const [date, setDate] = useState('');
   const [take, setTake] = useState<Pay | null>(null);
   const [open, setOpen] = useState<Pay | null>(null);
   const [req, setReq] = useState(false);
   const [cfg, setCfg] = useState(false);
   const d = q.data;
   if (!d || !d.supported) return null;
+  const min = d.firstDay;
   const b = d.balance;
   const pending = d.requests.find((r) => r.approved === null);
   const waiting = d.payments.filter((p) => !p.inCaisse);
@@ -812,14 +813,14 @@ function QuickPay({ companyId, kind, onOpen, full }: { companyId: number; kind: 
         </button>
       ) : (
         <div className="pxk-askrow">
-          <button type="button" className="pxv-btn gr pxk-qpask" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: other ? date : undefined })}>
+          <button type="button" className="pxv-btn gr pxk-qpask" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: other ? date || min : undefined })}>
             <Icon name="coins" /> {t('caisse.pay.ask')}
           </button>
           {other ? (
-            <input className="pxk-date" type="date" value={date} min={min} aria-label={t('caisse.qp.forDate')} onChange={(e) => setDate(e.target.value || min)} />
+            <input className="pxk-date" type="date" value={date && date >= min ? date : min} min={min} aria-label={t('caisse.qp.forDate')} onChange={(e) => setDate(e.target.value)} />
           ) : (
             <button type="button" className="pxk-qplink" onClick={() => setOther(true)}>
-              {t('caisse.qp.tomorrow')}
+              {d.firstIn > 1 ? t('caisse.qp.afterTomorrow') : t('caisse.qp.tomorrow')}
               <u>{t('caisse.qp.otherDate')}</u>
             </button>
           )}
@@ -852,7 +853,7 @@ function QuickPay({ companyId, kind, onOpen, full }: { companyId: number; kind: 
       {req && pending && (
         <Sheet title={t('caisse.ux.asked', { d: pending.date ? dateOnly(pending.date) : '—' })} onClose={() => setReq(false)}>
           <p className="pxv-help">{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</p>
-          <ReqActions id={pending.id} date={pending.date} onDone={() => setReq(false)} />
+          <ReqActions id={pending.id} date={pending.date} min={min} onDone={() => setReq(false)} />
         </Sheet>
       )}
       {open && <PayDetail p={open} onClose={() => setOpen(null)} />}
@@ -863,11 +864,10 @@ function QuickPay({ companyId, kind, onOpen, full }: { companyId: number; kind: 
 }
 
 // ---------------------------------------------------------------- a company's payments through its API (ZR)
-/** A payment request still waiting: another date (from tomorrow), or withdraw it. */
-function ReqActions({ id, date, onDone }: { id: number; date: string | null; onDone?: () => void }) {
+/** A payment request still waiting: another date (from ZR's first day, `min`), or withdraw it. */
+function ReqActions({ id, date, min, onDone }: { id: number; date: string | null; min: string; onDone?: () => void }) {
   const { t } = useTranslation();
   const [edit, setEdit] = useState(false);
-  const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const [d, setD] = useState(date && date >= min ? date : min);
   const move = useAction('caisse.payRequestDate', { success: (r) => t('caisse.pay.dateMoved', { d: dateOnly(r.date) }), onDone: () => (setEdit(false), onDone?.()) });
   const drop = useAction('caisse.payRequestCancel', { success: t('caisse.pay.requestCancelled'), onDone: () => onDone?.() });

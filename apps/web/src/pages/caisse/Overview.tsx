@@ -459,7 +459,8 @@ export function CourierPayCard({ companyId }: { companyId: number }) {
   const pending = d.requests.find((r) => r.approved === null);
   const waiting = d.payments.filter((p) => !p.inCaisse);
   const done = d.payments.filter((p) => p.inCaisse);
-  const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  // ZR's first day: tomorrow before 14:00, the day after from 14:00
+  const min = d.firstDay;
   return (
     <div className="card pxc-pay">
       <div className="card-head">
@@ -504,14 +505,14 @@ export function CourierPayCard({ companyId }: { companyId: number }) {
                   <small>{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</small>
                 </span>
               </div>
-              <ReqActions id={pending.id} date={pending.date} />
+              <ReqActions id={pending.id} date={pending.date} min={min} />
             </>
           ) : (
             <>
               <b>{t('caisse.pay.ask')}</b>
               <div className="pxc-reqa">
-                <input type="date" value={askDate || min} min={min} onChange={(e) => setAskDate(e.target.value)} aria-label={t('caisse.pay.newDate')} />
-                <button type="button" className="btn primary" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: askDate || undefined })}>
+                <input type="date" value={askDate && askDate >= min ? askDate : min} min={min} onChange={(e) => setAskDate(e.target.value)} aria-label={t('caisse.pay.newDate')} />
+                <button type="button" className="btn primary" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: askDate && askDate >= min ? askDate : undefined })}>
                   <Icon name="coins" /> {t('caisse.pay.ask')}
                 </button>
               </div>
@@ -572,10 +573,9 @@ export function CourierPayCard({ companyId }: { companyId: number }) {
   );
 }
 
-/** A payment request still waiting: another date (from tomorrow), or withdraw it. */
-function ReqActions({ id, date }: { id: number; date: string | null }) {
+/** A payment request still waiting: another date (from ZR's first day, `min`), or withdraw it. */
+function ReqActions({ id, date, min }: { id: number; date: string | null; min: string }) {
   const { t } = useTranslation();
-  const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const [d, setD] = useState(date && date >= min ? date : min);
   const move = useAction('caisse.payRequestDate', { success: (r) => t('caisse.pay.dateMoved', { d: dateOnly(r.date) }) });
   const drop = useAction('caisse.payRequestCancel', { success: t('caisse.pay.requestCancelled') });
