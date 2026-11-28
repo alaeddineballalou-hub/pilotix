@@ -1638,7 +1638,7 @@ class ApiController {
       // a team browser (it sent a test: Réglages › « Team et fournisseurs »): no pixel, its visit counts nowhere
       const team = teamBrowser(req);
       const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), {
-        slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, seen: `${base}${slug}/seen`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
+        slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, seen: `${base}${slug}/seen`, me: `${base}${slug}/me`, geo: `${base}geo/`, imgBase: `${base}img/`, site: atPages ? config.landingUrl : this.core.landingBase(), ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
         ...(team ? { team: true } : {}),
       });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
@@ -2030,6 +2030,24 @@ class ApiController {
     const b = body && typeof body === 'object' ? body : {};
     await this.core.call(r, 'landing.optin', await this.core.systemSession(r), { slug, ch: String(b.ch ?? ''), phone: String(b.phone ?? '') }).catch(() => null);
     return { ok: true };
+  }
+
+  /**
+   * A client coming back to the shop's pages: the page keeps a mark that this device ordered here (no name, no number)
+   * and asks here about it. If that order was confirmed by an agent, the answer carries the client's scrambled details
+   * for the shop's own pixels (Meta's advanced matching, landing.me); a fake, blocked or not yet confirmed order, a team
+   * browser, a post from another site or a flood: the plain answer anyone gets.
+   */
+  @Public()
+  @Post(['lp/:slug/me', 's/:shop/lp/:slug/me'])
+  async landingMe(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+    if (!/^[a-z0-9-]{2,60}$/.test(slug)) return { ok: true };
+    const did = String((body && typeof body === 'object' ? body.did : '') ?? '');
+    if (!/^[0-9a-f]{8,64}$/.test(did) || crossSite(req) || limitLanding(req.ip || 'unknown', 'me', 300) || teamBrowser(req)) return { ok: true };
+    const ref = await this.core.fromParam(shop).then((r) => r && this.core.forPublic(r)).catch(() => null);
+    if (!ref || ref.shop.status !== 'active') return { ok: true };
+    const r = intake(ref);
+    return this.core.call(r, 'landing.me', await this.core.systemSession(r), { slug, did }).catch(() => ({ ok: true }));
   }
 
   /** What a customer typed so far (a valid phone): their abandoned order if they leave. Same answer whatever happens. */

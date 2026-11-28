@@ -275,7 +275,7 @@ test('stock: a sold-out variant is marked on the page (when asked), and still or
   assert.match(html.html, /"px":"998877665544332"/, 'the page carries its pixel');
   assert.match(html.html, /connect\.facebook\.net\/en_US\/fbevents\.js/);
   // only the events Pilotix names leave: the pixel's own click reports (« SubscribedButtonClick ») are off, set before init
-  assert.match(html.html, /fbq\('set','autoConfig',false,i\);fbq\('init',i\)/);
+  assert.match(html.html, /fbq\('set','autoConfig',false,i\);if\(am&&ok\.indexOf\(i\)>=0\)fbq\('init',i,am\);else fbq\('init',i\)/);
   const preview: any = await call('landing.preview', admin, { slug: SLUG });
   assert.doesNotMatch(preview.html, /"px":"\d/, 'never a pixel inside Pilotix');
   const input = await human({ variant: v });
