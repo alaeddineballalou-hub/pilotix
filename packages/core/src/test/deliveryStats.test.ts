@@ -26,8 +26,10 @@ test('delivery statistics partition the dispatch cohort and preserve totals for 
 });
 test('ordinary agents cannot retrieve delivery statistics; manager is limited to their own assigned team',async()=>{
  const agent=await as(EMAILS.suivi);
+ assert.deepEqual(await call('suivi.statsOn', agent, {}), { on: false });
  await assert.rejects(call('suivi.stats',agent,P));
  const manager=await as(EMAILS.manager);
+ assert.deepEqual(await call('suivi.statsOn', manager, {}), { on: true });
  const m=manager.session.profile.id;
  const a=agent.session.profile.id;
  await setSetting(db,'teams',[{id:'test-team',name:'Test team',managerId:m,agentIds:[a]}]);

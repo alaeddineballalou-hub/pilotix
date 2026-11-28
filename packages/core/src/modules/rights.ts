@@ -31,6 +31,7 @@ import type { Db } from '../db';
 import { num, numOrNull } from '../db';
 import { bad, type Ctx, forbidden, notFound, proc } from '../rpc';
 import { agencyLead } from './agencyscope';
+import { canDeliveryStats } from './deliveryStats';
 import { getPrefs } from './prefs';
 
 /** Rights are a store's: a confirmation agency's or a marketer's own space keeps its roles and its people's ticks. */
@@ -280,8 +281,8 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'confirmation.list': (i) => (typeof i.sub === 'string' ? (i.sub === 'livrees' ? 'tab:commandes/livrees' : `tab:confirmation/${i.sub}`) : null),
   // Suivi
   'suivi.list': (i) => suiviTab(i.tab),
-  'suivi.statsOn': 'tab:suivi/stats',
-  'suivi.stats': 'tab:suivi/stats',
+  'suivi.statsOn': (_i, ctx) => canDeliveryStats(ctx) ? 'tab:suivi/stats' : null,
+  'suivi.stats': (_i, ctx) => canDeliveryStats(ctx) ? 'tab:suivi/stats' : null,
   'suivi.treat': 'act:suivi.treat',
   'suivi.callResult': 'act:suivi.treat',
   'suivi.resolve': 'act:suivi.treat',
