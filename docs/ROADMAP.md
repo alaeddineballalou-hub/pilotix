@@ -65,6 +65,7 @@ Exit — all MUST exist:
 2. **Server enforcement**: permissions and feature state checked on the server. Unknown or revoked access = deny. Cached grants invalidated when a role, permission or feature assignment changes.
 3. **Tests**: authorized access, denied access, revocation, agency boundaries, and tenant A denied on every inventoried route for tenant B's resources.
 4. **Feature registry**: stable IDs, owner, lifecycle state, dependent views, permissions, APIs, jobs and integrations.
+   **Scan stays on for every real shop.** The Scan test below runs only on a synthetic test tenant on local staging — it checks the on/off switch works; it never changes a real tenant.
    **Scan test:** disable Scan for one tenant → direct access denied, stale grants revoked, in-flight work that uses Scan handled, other tenants unaffected, authorized history still readable; re-enable restores access. Same checklist for activation, change, deprecation, retirement.
 5. **Security quick wins**: session expiry, secrets, webhook authenticity, upload validation, public checkout rate limits.
 6. **Privacy**: inventory access to customer phone numbers and addresses, audit sensitive exports, define retention / export / deletion with the owner — after local legal advice.
