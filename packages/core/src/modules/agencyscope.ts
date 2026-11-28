@@ -389,6 +389,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'sav.rate': savRole,
   'sav.findOrder': savRole,
   'suivi.counts': free,
+  'suivi.statsOn': free,
+  'suivi.stats': lead,
   'suivi.list': free,
   'suivi.treat': order('id'),
   'suivi.callResult': order('id'),
