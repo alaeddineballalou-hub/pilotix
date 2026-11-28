@@ -119,7 +119,7 @@ test('groups: the designs (tabs and search, sold out at the end, the editor prev
   assert.ok(tabs.indexOf('href="b?g=g"') < tabs.indexOf('href="a?g=g"'), 'sold out at the end');
   assert.match(tabs, /-33%/);
   // a group's pixel sends its PageView only: the pixel's own click reports are off, as on a product's page
-  assert.match(tabs, /fbq\('set','autoConfig',false,i\);fbq\('init',i\)/);
+  assert.match(tabs, /fbq\('set','autoConfig',false,i\);if\(am&&ok\.indexOf\(i\)>=0\)fbq\('init',i,am\);else fbq\('init',i\)/);
   for (const theme of ['grid', 'big', 'best', 'list'] as const) assert.match(renderGroup({ slug: 'g', title: 'T', subtitle: '', color: '#0f766e', theme, items, shopName: 'S' }, { mode: 'live' }), /href="b\?g=g"/);
   const draft: any = await call('landing.groupDraft', marketer, { slug: '', title: 'Brouillon', theme: 'list', items: pages.map((p) => ({ pageId: p.id })) });
   assert.match(draft.html, /Brouillon/);

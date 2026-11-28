@@ -91,7 +91,7 @@ export async function groupHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<st
   return renderRow(ctx, g, o);
 }
 
-async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'imgBase' | 'site' | 'url' | 'team' | 'seen'>): Promise<string> {
+async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'imgBase' | 'site' | 'url' | 'team' | 'seen' | 'me'>): Promise<string> {
   const list = readItems(g.items);
   const pages = list.length ? await ctx.db.query('SELECT * FROM landing_pages WHERE id = ANY($1)', [list.map((x) => x.pageId)]) : [];
   const P = new Map(pages.map((p: any) => [num(p.id), p]));
@@ -145,7 +145,7 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
       pixelId: o.mode === 'live' && !o.team ? px.meta.join(',') : '',
       tiktokId: o.mode === 'live' && !o.team ? px.tiktok.join(',') : '',
     },
-    { mode: o.mode, url: url || undefined, icon: await landingIconUrl(ctx.db, o.imgBase), viewId: randomId(), seen: o.mode === 'live' && !o.team ? o.seen : undefined },
+    { mode: o.mode, url: url || undefined, icon: await landingIconUrl(ctx.db, o.imgBase), viewId: randomId(), seen: o.mode === 'live' && !o.team ? o.seen : undefined, me: o.mode === 'live' && !o.team ? o.me : undefined },
   );
 }
 

@@ -110,11 +110,39 @@ export interface LandingRender {
    * asked for — Facebook loads an ad's page before the tap, robots and link previews ask for it too
    */
   seen?: string;
+  /**
+   * where the page asks about a client coming back (live mode: « …/lp/<page>/me »): see PX_START_JS. None: the pixels
+   * start as they always did.
+   */
+  me?: string;
   /** the page's public address (site/<store>/<page>): its canonical address for search engines and shared links */
   url?: string;
   /** opened from a group page: a « back to all the products » bar at the top, to that group */
   group?: { slug: string; title: string };
 }
+
+/** how long a device that ordered in a shop is recognised there (the page's mark of the order lives as long) */
+export const RETURNING_CLIENT_DAYS = 90;
+
+/**
+ * The Meta pixels of a page (C.pxs, else C.px) start here, and their events wait for it (pready). A client coming back:
+ * a page that took an order on this device left a mark for its shop (pxo:<the shop's page address>): when, and the
+ * shop's pixel ids — never a name or a number. If the mark is there (90 days) and the page has one of those pixels, the
+ * page asks the shop's server (C.me) about this device (localStorage « pxd »); the server answers with the client's
+ * scrambled details only when that order was confirmed by an agent (never a fake, a blocked or a waiting one), and only
+ * from that shop's own orders. Those pixels then start with them (Meta's manual advanced matching); every other pixel,
+ * every other visitor, and an answer that does not come within 1.5 s: as before.
+ */
+const PX_START_JS = `var PS=C.pxs&&C.pxs.length?C.pxs:[C.px],pw=[],pon=0,MB=String(C.me||'').replace(/[^\\/]+\\/me$/,''),MK='pxo:'+(/^https?:/.test(MB)?MB:location.host+MB);
+var pready=function(f){pw?pw.push(f):f()};
+var pgo=function(am,ok){if(pon)return;pon=1;PS.forEach(function(i){fbq('set','autoConfig',false,i);if(am&&ok.indexOf(i)>=0)fbq('init',i,am);else fbq('init',i)});var w=pw;pw=null;for(var k=0;k<w.length;k++)w[k]()};
+(function(){var mk=null,dd='';try{mk=JSON.parse(localStorage.getItem(MK)||'null');dd=localStorage.getItem('pxd')||''}catch(e){}
+var ok=mk&&mk.px&&mk.px.filter&&Date.now()-mk.t<${RETURNING_CLIENT_DAYS}*864e5?PS.filter(function(i){return mk.px.indexOf(i)>=0}):[];
+if(!C.me||!/^[0-9a-f]{8,64}$/.test(dd)||!ok.length)return pgo(null,[]);
+var to=setTimeout(function(){pgo(null,[])},1500);try{var x=new XMLHttpRequest();x.open('POST',C.me);x.setRequestHeader('Content-Type','application/json');x.timeout=1500;
+x.onload=function(){var r=null;try{r=JSON.parse(x.responseText)}catch(e){}clearTimeout(to);pgo(r&&r.am&&typeof r.am=='object'?r.am:null,ok)};
+x.onerror=x.ontimeout=function(){clearTimeout(to);pgo(null,[])};x.send(JSON.stringify({did:dd}))}catch(e){clearTimeout(to);pgo(null,[])}})();
+var pmark=function(){try{localStorage.setItem(MK,JSON.stringify({t:Date.now(),px:PS}))}catch(e){}};`;
 
 /** TikTok's pixel loader (its official snippet, the script itself loaded later by the page) */
 const TT_STUB = `!function(w,t){w.TiktokAnalyticsObject=t;var q=w[t]=w[t]||[];q.methods=['page','track','identify','instances','debug','on','off','once','ready','alias','group','enableCookie','disableCookie','holdConsent','revokeConsent','grantConsent'];q.setAndDefer=function(a,e){a[e]=function(){a.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<q.methods.length;i++)q.setAndDefer(q,q.methods[i]);q.instance=function(a){for(var e=q._i[a]||[],n=0;n<q.methods.length;n++)q.setAndDefer(e,q.methods[n]);return e};q.load=function(e,n){var r='https://analytics.tiktok.com/i18n/pixel/events.js';q._i=q._i||{};q._i[e]=[];q._i[e]._u=r;q._t=q._t||{};q._t[e]=+new Date;q._o=q._o||{};q._o[e]=n||{};var s=document.createElement('script');s.async=!0;s.src=r+'?sdkid='+e+'&lib='+t;var f=document.getElementsByTagName('script')[0];f.parentNode.insertBefore(s,f)}}(window,'ttq');`;
@@ -294,7 +322,8 @@ var utm={};try{utm=JSON.parse(sessionStorage.getItem('pxu')||'{}')}catch(e){}
 var xn=0;location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('='),k=p.shift(),v=p.join('=').replace(/\\+/g,' ');if(!v)return;if(!/^(utm_\\w+|fbclid|ttclid|gclid|ad_id|adset_id|campaign_id|placement|g|px_cat)$/.test(k)&&(!/^\\d{12,20}$/.test(v)||!/^[\\w.-]{1,40}$/.test(k)||xn++>5))return;try{v=decodeURIComponent(v)}catch(e){}utm[k]=v.slice(0,500)});try{sessionStorage.setItem('pxu',JSON.stringify(utm))}catch(e){}
 function ck(n){try{var m=d.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?m[1]:''}catch(e){return''}}
 var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
-(C.pxs&&C.pxs.length?C.pxs:[px]).forEach(function(i){fbq('set','autoConfig',false,i);fbq('init',i)});fbq('track','PageView',{},{eventID:'pv-'+C.vid});fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product_group',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
+${PX_START_JS}
+pready(function(){fbq('track','PageView',{},{eventID:'pv-'+C.vid});fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product_group',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid})});
 var lp=0,lpx=function(){if(lp)return;lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)},pm=$('mi');
 if(pm&&pm.tagName=='IMG'&&!pm.complete){pm.addEventListener('load',lpx);pm.addEventListener('error',lpx)}else lpx();setTimeout(lpx,4000);['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
 var tic=0;if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;(C.tts&&C.tts.length?C.tts:[C.tt]).forEach(function(i){ttq.load(i)});ttq.page();ttq.track('ViewContent',{contents:[{content_id:String(C.pid),content_type:'product_group',content_name:C.title}],value:C.price,currency:'DZD'},{event_id:'vc-'+C.vid})};
@@ -358,7 +387,7 @@ $('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onc
 var done=0,lt=null,last='';
 function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),items:vrs?lines():null,hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),promo:P?P.code:'',url:C.mode=='live'?location.href.slice(0,500):''}}
 function lead(now){if(!C.lead||done||busy)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);lt=null;
-var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product_group',value:tot()-pdisc(tot()),currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product_group',quantity:b.qty}],value:tot()-pdisc(tot()),currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
+var go=function(){lt=null;last=k;if(px&&!ic){ic=1;var icd={content_ids:[String(C.pid)],content_type:'product_group',value:tot()-pdisc(tot()),currency:'DZD',num_items:b.qty};pready(function(){fbq('track','InitiateCheckout',icd,{eventID:'ic-'+C.vid})})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product_group',quantity:b.qty}],value:tot()-pdisc(tot()),currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
 f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++;lead()});f.ph.addEventListener('paste',function(){ps=true});f.addEventListener('change',function(){lead()});
 function flush(){if(lt){clearTimeout(lt);lt=null;last='';lead(1)}}window.addEventListener('pagehide',flush);d.addEventListener('visibilitychange',function(){if(d.visibilityState=='hidden')flush()});
 function fk(p){var x=p.slice(2);return/(\\d)\\1{5,}/.test(x)||'0123456789012345'.indexOf(x.slice(0,7))>=0||'9876543210987654'.indexOf(x.slice(0,7))>=0}
@@ -372,7 +401,7 @@ var q=qv(),wait=Date.now();
 (function send(){if(nonce===null&&Date.now()-wait<4000)return setTimeout(send,150);var b=form();b.name=nm;b.phone=ph;b.ch=C.ch;b.pw=nonce;b.t=Date.now()-t0;b.ki=ki;b.wd=!!nv.webdriver;b.sc=de.scrollHeight-de.clientHeight<200?50:sy;b.ps=ps;b.mt=nv.maxTouchPoints==null?null:nv.maxTouchPoints;b.tt=tt;b.tk=C.ts;try{b.tz=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(e){}
 ask('order',b,function(r,st){
 if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textContent='\\u062a\\u0639\\u0630\\u0631 \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644\\u060c \\u062a\\u062d\\u0642\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u0627\\u062a\\u0635\\u0627\\u0644 \\u0648\\u0623\\u0639\\u062f \\u0627\\u0644\\u0645\\u062d\\u0627\\u0648\\u0644\\u0629';return}
-done=1;var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+vtx()+' \\u00d7 '+q;$('o2').textContent=money(tot()-pdisc(tot())+(fee||0));
+done=1;if(px&&C.me)pmark();var fee=fz()[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+vtx()+' \\u00d7 '+q;$('o2').textContent=money(tot()-pdisc(tot())+(fee||0));
 var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+vtx(),quantite:q,total:money(tot()-pdisc(tot())+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
 var wo=$('wo');if(wo)wo.onchange=function(){if(wo.checked&&!wo.s&&C.mode=='live'){wo.s=1;ask('optin',{ch:C.ch,phone:ph},function(){})}};
 f.style.display='none';$('ok').style.display='block';sbs();window.scrollTo(0,0)})})()};
@@ -462,7 +491,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     if (x.v && vi[x.v] === undefined) vi[x.v] = k;
   });
   const cfg = {
-    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', sn: r.mode === 'live' ? r.seen ?? '' : '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, vi, fees: v.fees, fs: v.variantFee && Object.keys(v.variantFee).length ? v.feeSets ?? null : null, vf: v.variantFee && Object.keys(v.variantFee).length ? v.variantFee : null, ...(split ? { vt: Object.fromEntries(v.variants.map((x) => [x.title, x.id])) } : {}), title: v.title, vl: split ? v.options!.map((o) => o.name).join(' / ') : v.variantLabel, cta,
+    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', sn: r.mode === 'live' ? r.seen ?? '' : '', me: r.mode === 'live' ? r.me ?? '' : '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, vi, fees: v.fees, fs: v.variantFee && Object.keys(v.variantFee).length ? v.feeSets ?? null : null, vf: v.variantFee && Object.keys(v.variantFee).length ? v.variantFee : null, ...(split ? { vt: Object.fromEntries(v.variants.map((x) => [x.title, x.id])) } : {}), title: v.title, vl: split ? v.options!.map((o) => o.name).join(' / ') : v.variantLabel, cta,
     vid: r.viewId ?? '', px: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL)[0] ?? '' : '', pxs: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL) : [], pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
     g: r.group?.slug ?? '',
     wa: v.whatsapp && whatsappNumber(v.whatsapp.number) ? { n: whatsappNumber(v.whatsapp.number), m: v.whatsapp.message || WHATSAPP_DEFAULT.message } : null,
@@ -573,6 +602,8 @@ export interface GroupRender {
   /** this view (the pixel's PageView and the server's carry the same id) and where it is said seen (as LandingRender's) */
   viewId?: string;
   seen?: string;
+  /** where the page asks about a client coming back (as LandingRender's) */
+  me?: string;
 }
 
 const GROUP_CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(c, 0.9)};--b:#e5e7eb;--t:#111827;--m:#6b7280}
@@ -613,7 +644,9 @@ for(var i=0;i<a.length;i++){if(C.mode=='live'){if(q)a[i].href=a[i].getAttribute(
 var sr=d.getElementById('sr'),tb=d.querySelectorAll('.tb button'),tab='',em=d.getElementById('em');
 function f(){var t=sr?sr.value.trim().toLowerCase():'',n=0;for(var i=0;i<a.length;i++){var x=a[i],ok=(!tab||x.getAttribute('data-t')==tab)&&(!t||x.getAttribute('data-n').indexOf(t)>=0);x.className=x.className.replace(/ no/g,'')+(ok?'':' no');if(ok)n++}if(em)em.className=n?'em no':'em'}
 if(sr)sr.oninput=f;for(var j=0;j<tb.length;j++)tb[j].onclick=function(){for(var k=0;k<tb.length;k++)tb[k].className='';this.className='on';tab=this.getAttribute('data-t');f()};
-if(C.px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];(C.pxs&&C.pxs.length?C.pxs:[C.px]).forEach(function(i){fbq('set','autoConfig',false,i);fbq('init',i)});fbq('track','PageView',{},{eventID:'pv-'+C.vid});
+if(C.px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
+${PX_START_JS}
+pready(function(){fbq('track','PageView',{},{eventID:'pv-'+C.vid})});
 var lp=0,lx=function(){if(lp)return;lp=1;var s=d.createElement('script');s.async=1;s.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(s)},gi=d.querySelector('img.im');
 if(gi&&!gi.complete){gi.addEventListener('load',lx);gi.addEventListener('error',lx)}else lx();setTimeout(lx,4000);['touchstart','scroll'].forEach(function(e){window.addEventListener(e,lx,{once:true,passive:true})})}
 if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;(C.tts&&C.tts.length?C.tts:[C.tt]).forEach(function(i){ttq.load(i)});ttq.page()};window.addEventListener('load',function(){setTimeout(tlx,2500)});['touchstart','scroll'].forEach(function(e){window.addEventListener(e,tlx,{once:true,passive:true})})}
@@ -673,6 +706,7 @@ export function renderGroup(v: GroupView, r: GroupRender): string {
     g: v.slug,
     vid: r.viewId ?? '',
     sn: r.mode === 'live' ? r.seen ?? '' : '',
+    me: r.mode === 'live' ? r.me ?? '' : '',
     px: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL)[0] ?? '' : '',
     pxs: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL) : [],
     tt: r.mode === 'live' ? pixelIds(v.tiktokId, TIKTOK_PIXEL)[0] ?? '' : '',

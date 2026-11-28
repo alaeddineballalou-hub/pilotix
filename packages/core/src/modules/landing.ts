@@ -31,6 +31,7 @@ import {
   landingPreloadLink,
   landingPrice,
   renderLanding,
+  RETURNING_CLIENT_DAYS,
   sha256Hex,
   WHATSAPP_DEFAULT,
   whatsappNumber,
@@ -441,6 +442,8 @@ export interface HtmlOpts {
    * previews are no visits.
    */
   seen?: string;
+  /** where the page asks about a client coming back (live mode: « …/lp/<page>/me », landing.me) */
+  me?: string;
   /** a team browser (Réglages › « Team et fournisseurs »: it sent a test; the server's cookie): no pixel, not counted */
   team?: boolean;
 }
@@ -630,6 +633,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     group: group ?? undefined,
     icon: await landingIconUrl(ctx.db, o.imgBase),
     seen: o.mode === 'live' && !o.team ? o.seen : undefined,
+    me: o.mode === 'live' && !o.team ? o.me : undefined,
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
@@ -1737,6 +1741,36 @@ function userData(r: { phone: string; name: string; commune?: string | null; wil
   return u;
 }
 
+/**
+ * A client coming back to the shop's pages (landing.me): the scrambled details (Meta's manual advanced matching, one
+ * SHA-256 string per key, as the browser pixel takes them) of the last order this device sent in this shop, only if
+ * that order is from the last 90 days and was confirmed by an agent — never a blocked, fake, duplicate or wrong-number
+ * one, never one marked « Fausse » / « Concurrent » (the order or the device), never one still waiting for its call. So
+ * a fraudster's page always gets the same plain answer as a stranger's (nothing about its order's fate), and a shop
+ * only ever answers about its own orders. The order's details as they are now (an agent may have corrected them).
+ */
+export async function returningClient(db: Db, did: string, now: number): Promise<Record<string, string> | null> {
+  if (!/^[0-9a-f]{8,64}$/.test(did)) return null;
+  const device = `d:${did}`;
+  const last = (
+    await db.query(`SELECT order_id FROM landing_submits WHERE fp = $1 AND at > $2 ORDER BY at DESC, id DESC LIMIT 1`, [device, isoAt(now - RETURNING_CLIENT_DAYS * 86_400_000)])
+  )[0];
+  if (!last?.order_id) return null;
+  const o = (
+    await db.query(
+      `SELECT o.phone, o.customer_name, o.commune, o.wilaya_id, o.customer_id FROM orders o
+       WHERE o.id = $1 AND o.confirmed_at IS NOT NULL AND NOT o.is_exchange AND o.conf_status <> ALL($2)
+         AND NOT EXISTS (SELECT 1 FROM fraud_marks f WHERE NOT f.lifted AND (f.order_id = o.id OR f.device = $3))`,
+      [num(last.order_id), NOT_A_LEAD, device],
+    )
+  )[0];
+  if (!o?.phone) return null;
+  const u = userData({ phone: String(o.phone), name: realName(o.customer_name), commune: o.commune, wilaya: numOrNull(o.wilaya_id), customerId: numOrNull(o.customer_id) });
+  const am: Record<string, string> = {};
+  for (const k of ['ph', 'fn', 'ln', 'ct', 'st', 'country', 'external_id']) if (Array.isArray(u[k])) am[k] = String((u[k] as string[])[0]);
+  return am;
+}
+
 /** Meta keeps events of the last 7 days only. */
 const META_MAX_AGE = 7 * 86_400;
 
@@ -2734,7 +2768,7 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), seen: z.string().max(600).optional(), team: z.boolean().optional() }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional(), seen: z.string().max(600).optional(), me: z.string().max(600).optional(), team: z.boolean().optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
   /** A page (or a group page) in front of a person (« …/lp/<page>/seen »): the visit is counted, and told to Meta. */
@@ -2807,6 +2841,14 @@ export const landingProcs = {
   'landing.capture': proc([], CaptureInput, async (ctx, i) => {
     const r = await captureLead(ctx, i);
     return r;
+  }),
+  /**
+   * A page asks about a client coming back (its mark of an order on this device): his scrambled details for the page's
+   * own pixels if that order was confirmed (returningClient), else the plain answer every other visitor gets.
+   */
+  'landing.me': proc([], z.object({ slug: z.string().max(80), did: z.string().max(64) }), async (ctx, i) => {
+    const am = await returningClient(ctx.db, i.did, ctx.now()).catch(() => null);
+    return am ? { ok: true as const, am } : { ok: true as const };
   }),
   /** the server's job (every minute) and the cron hook */
   'landing.run': proc([], z.object({}), (ctx) => landingRun(ctx)),
