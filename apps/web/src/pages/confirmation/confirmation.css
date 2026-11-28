@@ -264,6 +264,9 @@ html[data-theme="dark"] .px-sx-rs-row .bk { background: var(--line); }
 .px-sx-rs-row .bk div { height: 100%; border-radius: 5px; background: #E58A80; }
 .px-sx-rs-row .pc { color: var(--muted); text-align: end; }
 .px-sx-tbl th .px-help { width: 15px; height: 15px; margin-inline-start: 4px; }
+/* Confirmées' table (13 columns for the owner since « Annulées » and « En cours », 28 Nov 2026): a column's name may go
+   on two lines when space is short, so the table fits a 1280 px screen instead of hiding « Taux final » */
+@media (min-width: 761px) { .px-cf .px-sx-tbl th.num { white-space: normal; } }
 /* a line's name on one line (computer, tablet): the table scrolls sideways instead of a name on four lines */
 @media (min-width: 761px) { .px-sx-tbl td:first-child { white-space: nowrap; } }
 @media (max-width: 760px) {
