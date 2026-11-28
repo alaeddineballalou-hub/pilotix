@@ -148,3 +148,10 @@
 .px-wide .pxt-tools { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 76px; }
 .px-wide .pxt-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .px-wide .pxt-tools .bjsc { margin: 0; }
+
+/* Dépôt's bar (the owner's choice, 28 Nov 2026): « Statistiques » and « Réglages » are icons only, so the steps,
+   « Erreurs de livraison » and both fit a computer's screen; their names stay as tooltips and for screen readers */
+.bjm-bar .bjm-p.bjm-ico { padding-inline: 11px; }
+.bjm-bar .bjm-p.bjm-ico .bji { width: 17px; height: 17px; }
+.bjm-bar[data-g="depot"] .bjm-p.bjm-cfg { padding-inline: 11px; }
+.bjm-bar[data-g="depot"] .bjm-p.bjm-cfg .bjm-l { display: none; }

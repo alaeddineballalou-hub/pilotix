@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { tabOn } from '../../lib/rights';
 import { Icon } from '../../ui/kit';
+import './stages.css';
 
 // « En livraison » moved to Suivi (the parcels on the road are the suivi's work); an old link goes there
 /** Dépôt's steps: the menu's tabs (packages/shared/src/menu.ts), shared with Utilisateurs › Rôles */
@@ -66,10 +67,17 @@ export function DepotStageBar({
               {k === 'retours' ? '⟶' : '›'}
             </span>
           )}
-          <a className={`bjm-p ${stage === k && !cfgOn ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
-            <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
-            {counts && !APART.includes(k) && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
-          </a>
+          {k === 'stats' ? (
+            // « Statistiques »: a chart only (the owner's choice, 28 Nov 2026), so the bar fits a computer's screen
+            <a className={`bjm-p bjm-ico ${stage === k && !cfgOn ? 'on' : ''}`} href="#/depot/stats" aria-label={t(menuTabName('depot', k))} title={t(menuTabName('depot', k))} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
+              <Icon name="chart" />
+            </a>
+          ) : (
+            <a className={`bjm-p ${stage === k && !cfgOn ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
+              <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
+              {counts && !APART.includes(k) && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
+            </a>
+          )}
         </span>
       ))}
       {/* « Réglages »: apart at the end, with a gear (administrators by default; Utilisateurs › Rôles) */}
