@@ -45,6 +45,8 @@ export function DepotStageBar({
 }) {
   const { t } = useTranslation();
   const bar = useRef<HTMLElement>(null);
+  // « Réglages » (administrators by default): it can come once the rights are there, over the end of the bar
+  const gear = tabOn('depot', 'reglages');
   useLayoutEffect(() => {
     const el = bar.current;
     const on = el?.querySelector<HTMLElement>('.bjm-p.on');
@@ -59,7 +61,7 @@ export function DepotStageBar({
     if (b.left >= lo && b.right <= hi) return;
     el.scrollBy({ left: b.left + b.width / 2 - (lo + hi) / 2 });
     // again once the counts are there: they widen the stages before it (the last one, « Erreurs », left the screen)
-  }, [stage, !!counts, stats]);
+  }, [stage, !!counts, stats, gear]);
   const shown = DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs') && (k !== 'stats' || stats));
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
@@ -86,7 +88,7 @@ export function DepotStageBar({
         </span>
       ))}
       {/* « Réglages »: apart at the end, with a gear (administrators by default; Utilisateurs › Rôles) */}
-      {tabOn('depot', 'reglages') && (
+      {gear && (
         <a className={`bjm-p bjm-cfg ${cfgOn ? 'on' : ''}`} href="#/depot/reglages" aria-label={t(menuTabName('depot', 'reglages'))} title={t(menuTabName('depot', 'reglages'))} aria-current={cfgOn ? 'page' : undefined}>
           <Icon name="settings" />
           <span className="bjm-l">{t(menuTabName('depot', 'reglages'))}</span>
