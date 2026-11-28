@@ -4,6 +4,7 @@ import { sealSetting } from '../secretbox';
 import { CONF_STATUSES, DEFAULT_CALL_SETTINGS, FOLLOW_STATUSES, SAV_STATUSES } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
+import { effectiveGrid, withNewWilayas } from '../newwilayas';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { can } from './rights';
 import { DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
@@ -276,7 +277,8 @@ const toChannel = (r: any) => ({
 
 /** Copy of the default company's tariffs as a client price grid (or a flat grid when none). */
 async function gridFromCompany(db: Db, companyId: number | null) {
-  const rows = companyId ? await db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id = $1', [companyId]) : [];
+  // a new wilaya (2026) the company has no price for yet: its old wilaya's (newwilayas.ts)
+  const rows = companyId ? withNewWilayas(await db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id = $1', [companyId])) : [];
   const grid: Record<string, { home: number; desk: number }> = {};
   for (let w = 1; w <= 69; w++) grid[String(w)] = { home: 600, desk: 400 };
   for (const r of rows) grid[String(num(r.wilaya_id))] = { home: num(r.home), desk: num(r.desk) };
@@ -420,10 +422,12 @@ export const adminProcs = {
       list.push({ id: num(v.id), title: v.title as string, feeGrid: (v.fee_grid as string | null) || null, active: !!v.active });
       byProduct.set(num(v.product_id), list);
     }
+    // the prices as they count: a new wilaya (2026) without its own price shows (and is saved with) its old wilaya's (newwilayas.ts)
+    const grids = await getSetting(ctx.db, 'clientFees');
     return {
-      grids: await getSetting(ctx.db, 'clientFees'),
+      grids: Object.fromEntries(Object.entries(grids).map(([name, g]) => [name, effectiveGrid(g)])) as typeof grids,
       defaultGrid: await getSetting(ctx.db, 'defaultFeeGrid'),
-      savFees: await getSetting(ctx.db, 'savFees'),
+      savFees: effectiveGrid(await getSetting(ctx.db, 'savFees')),
       products: products.map((p: any) => ({
         id: num(p.id),
         name: p.name as string,

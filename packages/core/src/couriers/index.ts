@@ -4,6 +4,7 @@
 import type { Ctx } from '../rpc';
 import { ADAPTERS } from './adapters';
 import { helpers, loadCompany, loadParcels } from './load';
+import { courierChange, courierCompany, courierParcel, courierWilaya } from './newwilayas';
 import { cacheKeyOf, type ChangeInput, type ClaimInput, type CourierApi, type CourierCompany, type TrackItem } from './types';
 import { ASK_AGAIN_MS, CourierError, LIST_KEPT_MS, listClock, setDeadline } from './util';
 
@@ -95,7 +96,8 @@ const COMMUNES_KEPT = new Map<string, { at: number; list: { name: string; ar: st
 export async function runCourier(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   if (ctx.shop?.demo) throw new CourierError('Boutique démo : aucune action réelle chez un transporteur');
   const a = args as Args;
-  const c = await loadCompany(ctx.db, a.companyId);
+  // a company that still counts 58 wilayas gets a new one (2026) as its old one: here, then each parcel (./newwilayas)
+  const c = courierCompany(await loadCompany(ctx.db, a.companyId));
   if (c.secret.demo) throw new CourierError('Identifiants démo : aucune action réelle chez un transporteur');
   if (action === 'askReturn' || action === 'retry' || action === 'note') {
     const ad = ADAPTERS[c.kind];
@@ -109,7 +111,7 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
   setDeadline(action === 'track' || action === 'fees' ? 240_000 : 120_000);
   switch (action) {
     case 'send':
-      return api.send(await loadParcels(ctx.db, a.ids ?? []));
+      return api.send((await loadParcels(ctx.db, a.ids ?? [])).map((p) => courierParcel(c.kind, p)));
     case 'track':
       return api.track(a.items ?? []);
     case 'label':
@@ -132,7 +134,7 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       // commune was not on it: the company may have just added it): asked again at once, at most once a minute.
       const ad = ADAPTERS[c.kind];
       if (!ad.communes) return [];
-      const w = Number(a.wilayaId) || 0;
+      const w = courierWilaya(c.kind, Number(a.wilayaId) || 0);
       const key = `${cacheKeyOf(c)}:${c.kind}:${w}`;
       const had = COMMUNES_KEPT.get(key);
       if (had && listClock.now() - had.at < (a.fresh ? ASK_AGAIN_MS : LIST_KEPT_MS)) return had.list;
@@ -168,7 +170,7 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
     case 'preview': {
       const p = (await loadParcels(ctx.db, [a.orderId!]))[0];
       const ad = ADAPTERS[c.kind];
-      return ad.preview ? ad.preview(c, p) : null;
+      return ad.preview ? ad.preview(c, p ? courierParcel(c.kind, p) : p) : null;
     }
     case 'payBalance':
     case 'payRequests':
@@ -203,7 +205,7 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       if (!ad.exchange) throw new CourierError(`${c.name} : pas d’échange par API`);
       const p = (await loadParcels(ctx.db, [a.orderId!]))[0];
       if (!p) throw new CourierError('Commande introuvable');
-      return ad.exchange(c, p, a.item!, helpers);
+      return ad.exchange(c, courierParcel(c.kind, p), a.item!, helpers);
     }
     case 'bagCreate':
     case 'bagAdd':
@@ -226,7 +228,7 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       if (!ad.swap) throw new CourierError(`${c.name} : pas de swap par API`);
       const p = (await loadParcels(ctx.db, [a.orderId!]))[0];
       if (!p) throw new CourierError('Commande introuvable');
-      return ad.swap(c, { item: a.item!, to: p }, helpers);
+      return ad.swap(c, { item: a.item!, to: courierParcel(c.kind, p) }, helpers);
     }
     case 'parcel': {
       const ad = ADAPTERS[c.kind];
@@ -242,7 +244,7 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       const ad = ADAPTERS[c.kind];
       if (!ad.change) throw new CourierError(`${c.name} : pas de demande de modification par API`);
       const p = a.orderId ? ((await loadParcels(ctx.db, [a.orderId]))[0] ?? null) : null;
-      return ad.change(c, a.change!, helpers, p);
+      return ad.change(c, courierChange(c.kind, a.change!), helpers, p ? courierParcel(c.kind, p) : null);
     }
     case 'changeStates': {
       const ad = ADAPTERS[c.kind];

@@ -2,7 +2,7 @@
 // own livreurs and their round ("Ma tournée"). Courier APIs run on the server only (ctx.server.courier → couriers/index.ts);
 // in the browser preview every courier answer is simulated.
 import { sealDeep, sealString } from '../secretbox';
-import { COURIER_KINDS, CourierKind, courierCardOf, FOLLOW_ON_ROAD, FollowStatus, itemsKey, normalizePhone, Order, Session, SUB_TAKEN_UNSCANNED, WILAYAS } from '@pilotix/shared';
+import { COURIER_KINDS, CourierKind, courierCardOf, FOLLOW_ON_ROAD, FollowStatus, itemsKey, normalizePhone, Order, Session, SUB_TAKEN_UNSCANNED, wilayaAndOld, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
 import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../couriers/custom';
@@ -23,6 +23,8 @@ function sameSecret(a: string, b: string): boolean {
   return d === 0;
 }
 import { getSetting } from '../settings';
+import { feeWilayaSql, fillNewWilayas, withNewWilayas } from '../newwilayas';
+import { courierParcel } from '../couriers/newwilayas';
 import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, getOrder, listOrders, setFollow } from './orders';
 import { recipients } from './depotalerts';
@@ -201,6 +203,8 @@ export async function importFeesNow(ctx: Ctx, companyId: number) {
     } else rows = (await courierOf(ctx)('fees', { companyId }, ctx)) as FeeRow[];
     // an empty answer is a hiccup, not « delivers nowhere »: the prices we have stay
     if (!rows.some((r) => r.home !== null || r.desk !== null)) throw bad(`${c.name} n’a renvoyé aucun prix : les prix d’avant restent`);
+    // a new wilaya (2026) the company does not price yet (it still counts 58): its old wilaya's price (newwilayas.ts)
+    rows = fillNewWilayas(rows);
   } catch (e: any) {
     await setFeesSync(ctx.db, companyId, { error: String(e?.message ?? e).slice(0, 300) });
     throw e;
@@ -287,7 +291,7 @@ async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: n
         sent.push({ id: oid, ok: false, error: e?.message ?? 'Erreur' });
       }
     }
-    const fees = new Map((await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id=$1', [companyId])).map((f: any) => [num(f.wilaya_id), f]));
+    const fees = new Map(withNewWilayas(await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id=$1', [companyId])).map((f: any) => [num(f.wilaya_id), f]));
     let weightRule: WeightRule | null = null;
     const rule = async () => (weightRule ??= await companyWeightRule(ctx.db, companyId));
     for (const s of sent) {
@@ -418,7 +422,7 @@ async function demoCosts(ctx: Ctx, companyId: number, ids: number[], weighed: bo
   const rows = await ctx.db.query(
     `SELECT o.id, o.is_stopdesk, f.home, f.desk, f.return_fee,
        (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg
-     FROM orders o JOIN delivery_fees f ON f.company_id = $1 AND f.wilaya_id = o.wilaya_id WHERE o.id = ANY($2)`,
+     FROM orders o JOIN delivery_fees f ON f.company_id = $1 AND f.wilaya_id = ${feeWilayaSql('$1', 'o.wilaya_id')} WHERE o.id = ANY($2)`,
     [companyId, ids],
   );
   return new Map(rows.map((r: any) => [num(r.id), { delivery: num(r.is_stopdesk ? r.desk : r.home), ret: num(r.return_fee), kg: weighed ? zrWeighs(num(r.id), r.kg) : null }]));
@@ -1291,7 +1295,8 @@ export const deliveryProcs = {
   'delivery.saveFees': proc([], z.object({ companyId: id, rows: z.array(FeeInput).max(69) }), async (ctx, i) => {
     const c = await companyOr404(ctx.db, i.companyId);
     if (KINDS[c.kind].fees) throw bad(`Les prix de ${c.name} viennent de son API : ils ne se changent pas à la main (Pilotix les reprend tout seul chaque nuit)`);
-    await saveFeeRows(ctx.db, i.companyId, i.rows);
+    // a new wilaya (2026) left without a price: its old wilaya's (newwilayas.ts)
+    await saveFeeRows(ctx.db, i.companyId, fillNewWilayas(i.rows));
     return feesOf(ctx.db, i.companyId);
   }),
 
@@ -1415,8 +1420,9 @@ export const deliveryProcs = {
 
   'delivery.stopdesks': proc(null, z.object({ companyId: id, wilayaId: z.number().int().min(1).max(69).optional() }), async (ctx, i) => {
     const rows = await ctx.db.query(
-      `SELECT * FROM stopdesks WHERE company_id=$1 AND gone_at IS NULL ${i.wilayaId ? 'AND wilaya_id=$2' : ''} ORDER BY wilaya_id, commune, name`,
-      i.wilayaId ? [i.companyId, i.wilayaId] : [i.companyId],
+      `SELECT * FROM stopdesks WHERE company_id=$1 AND gone_at IS NULL ${i.wilayaId ? 'AND wilaya_id = ANY($2::int[])' : ''} ORDER BY wilaya_id, commune, name`,
+      // a new wilaya (2026): the company's bureaus still kept in its old wilaya too
+      i.wilayaId ? [i.companyId, wilayaAndOld(i.wilayaId)] : [i.companyId],
     );
     return rows.map((r: any) => ({ id: num(r.id), companyId: num(r.company_id), wilayaId: num(r.wilaya_id), commune: r.commune, name: r.name, address: r.address, extId: r.ext_id as string | null }));
   }),
@@ -1732,7 +1738,7 @@ export const deliveryProcs = {
     let error: string | null = null;
     if (c.kind === 'custom') {
       try {
-        request = await custom.preview!(await loadCompany(ctx.db, c.id), parcel);
+        request = await custom.preview!(await loadCompany(ctx.db, c.id), courierParcel(c.kind, parcel));
       } catch (e: any) {
         error = e?.message ?? 'Erreur';
       }

@@ -12,6 +12,7 @@
 // GET …/{id}), POST /workflows/search (ZR's statuses), GET /delivery-pricing/service-pricing, webhooks (/webhooks/endpoints).
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
+import { oldWilaya } from '@pilotix/shared';
 import { cacheKeyOf } from './types';
 import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimFound, ClaimMessage, ClaimState, CourierAdapter, CourierBags, CourierCompany, CourierStep, CourierSwapSeen, Desk, FeeRow, Helpers, Parcel, ParcelInfo, SwapInput, SwapSent, TrackItem } from './types';
 import { ASK_AGAIN_MS, baseUrl, bestMatch, CourierError, cut, http, intl, LIST_KEPT_MS, listClock, needKeys, sleep, timeUp } from './util';
@@ -92,6 +93,15 @@ async function hubs(c: CourierCompany) {
   return { list: out, complete: false };
 }
 
+/**
+ * ZR's wilayas for one of ours: the same code; for a new wilaya (2026) also the one it was part of (Bou Saâda 68 → M'Sila
+ * 28), where ZR keeps its communes as long as it counts 58 wilayas. ZR's own new wilaya first, the day it has one.
+ */
+async function zrWilayas(c: CourierCompany, wilayaId: number) {
+  const ws = await territories(c, 'wilaya');
+  return [...new Set([wilayaId, oldWilaya(wilayaId)])].map((code) => ws.find((t: any) => Number(t.code) === code)).filter((t): t is any => !!t);
+}
+
 /** One of a price line's prices (home, pickup-point, return): ZR's price with VAT, else the discounted or plain one. */
 function rateOf(rate: any, type: string): number | null {
   const x = (rate?.deliveryPrices ?? []).find((d: any) => d?.deliveryType === type);
@@ -146,7 +156,8 @@ async function communeFees(c: CourierCompany, rows: Map<number, FeeRow>, local: 
   for (const [w, list] of per) fill(w, feeOf(w, list));
   if (!home || priced(home)) return;
   const one = (id: unknown) => http(c.name, url(c, `/delivery-pricing/rates/${encodeURIComponent(String(id))}`), { headers: h(c) }).catch(() => null);
-  const t = ws.find((w: any) => Number(w.code) === home);
+  // a shop in a new wilaya (2026) ZR does not have yet: the one it was part of
+  const t = ws.find((w: any) => Number(w.code) === home) ?? ws.find((w: any) => Number(w.code) === oldWilaya(home));
   if (!t) return;
   fill(home, feeOf(home, [await one(t.id)]));
   if (priced(home)) return;
@@ -327,12 +338,15 @@ async function zrAddress(c: CourierCompany, p: Parcel, helpers: Helpers) {
     if (!hub) throw new CourierError(`Bureau ZR introuvable : réimportez les stop desks de ${c.name}`);
     return { hubId: String(hub.id), address: { cityTerritoryId: hub.address?.cityTerritoryId, districtTerritoryId: hub.address?.districtTerritoryId, street: cut(p.address || hub.name, 200) } };
   }
-  const w = (await territories(c, 'wilaya')).find((t) => Number(t.code) === Number(p.wilaya_id));
-  if (!w) throw new CourierError(`ZR ne livre pas la wilaya ${p.wilaya_id}`);
-  // ZR gives each commune's Arabic name too: « Beni Zmenzer » (أيت زمنزر) is found as ZR's « Ait Zmenzer »
-  const com = await helpers.communeName(p, async (_w, fresh) => (await territories(c, 'commune', fresh)).filter((t) => t.parentId === w.id).map((t) => ({ id: t.id, name: t.name, ar: t.nameArabic ?? null })), `zr:${cacheKeyOf(c)}:${w.id}`);
-  if (!com) throw new CourierError(`Commune « ${p.commune} » introuvable chez ZR : corrigez la commune`);
-  return { hubId: undefined, address: { cityTerritoryId: w.id, districtTerritoryId: com.id, street: cut(p.address || p.commune, 200) } };
+  // a new wilaya (2026): ZR's own if it has it, else (or when the commune is not there yet) the one it was part of
+  const ws = await zrWilayas(c, Number(p.wilaya_id));
+  if (!ws.length) throw new CourierError(`ZR ne livre pas la wilaya ${p.wilaya_id}`);
+  for (const w of ws) {
+    // ZR gives each commune's Arabic name too: « Beni Zmenzer » (أيت زمنزر) is found as ZR's « Ait Zmenzer »
+    const com = await helpers.communeName({ ...p, wilaya_id: Number(w.code) }, async (_w, fresh) => (await territories(c, 'commune', fresh)).filter((t) => t.parentId === w.id).map((t) => ({ id: t.id, name: t.name, ar: t.nameArabic ?? null })), `zr:${cacheKeyOf(c)}:${w.id}`);
+    if (com) return { hubId: undefined, address: { cityTerritoryId: w.id, districtTerritoryId: com.id, street: cut(p.address || p.commune, 200) } };
+  }
+  throw new CourierError(`Commune « ${p.commune} » introuvable chez ZR : corrigez la commune`);
 }
 
 /** The body ZR wants for a new parcel (also used for an exchange). The customer is created or updated first. */
@@ -849,6 +863,8 @@ async function swapReady(c: CourierCompany): Promise<string> {
 }
 
 export const zr: CourierAdapter = {
+  // a new wilaya (2026): ZR's own when it has it, else the one it was part of (zrWilayas)
+  knowsNewWilayas: true,
   statuses: STATUSES,
   // « Commande annulée » or « Ne répond pas 3 » under any status (« Sortie en livraison », « Confirmé au bureau »…): the
   // customer cancelled or never answered — an alert, never left « En livraison » (24 Nov 2026), and ZR's swap is open
@@ -1080,8 +1096,10 @@ export const zr: CourierAdapter = {
    *  is one of them, so a commune ZR does not know is fixed with the customer, not found at the depot. */
   async communes(c, wilayaId, fresh) {
     needKeys(c, 'api_key', 'tenant');
-    const w = (await territories(c, 'wilaya')).find((t) => Number(t.code) === Number(wilayaId));
-    if (!w) return [];
-    return (await territories(c, 'commune', fresh)).filter((t) => t.parentId === w.id).map((t) => ({ id: String(t.id), name: String(t.name ?? ''), ar: t.nameArabic ? String(t.nameArabic) : null }));
+    // a new wilaya (2026): its communes at ZR, and those ZR still keeps in the wilaya it was part of (as zrAddress sends)
+    const ws = await zrWilayas(c, Number(wilayaId));
+    if (!ws.length) return [];
+    const ids = new Set(ws.map((w) => w.id));
+    return (await territories(c, 'commune', fresh)).filter((t) => ids.has(t.parentId)).map((t) => ({ id: String(t.id), name: String(t.name ?? ''), ar: t.nameArabic ? String(t.nameArabic) : null }));
   },
 };

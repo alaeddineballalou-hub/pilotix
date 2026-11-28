@@ -1,6 +1,6 @@
 // Confirmation queue: lists with call deadlines, the agent banner, and the KPI blocks of
 // Nouvelles / En cours / Confirmées. Order changes go through modules/orders.ts.
-import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO, ConfStatus, LEVEL_RANK, messageTry, nextDue, Order, slotAt } from '@pilotix/shared';
+import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO, ConfStatus, LEVEL_RANK, messageTry, nextDue, Order, slotAt, wilayaAndOld } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
@@ -16,6 +16,7 @@ import { attackOf, AUTO_NO_ANSWER, CONFIRMED_LIKE, type Lead, leadOf } from './l
 import { reasonCode } from './pilotlearn';
 import { checkRules } from './pilotchecks';
 import { blackNumbers, shareBlacklist } from './sharedblacklist';
+import { withNewWilayas } from '../newwilayas';
 import { agencyNames, confirmationAgencies } from './agencies';
 
 // ---------------------------------------------------------------- sub-pages
@@ -1712,19 +1713,23 @@ export const confirmationProcs = {
    */
   'confirmation.deskOptions': proc(['confirmation'], z.object({ wilayaId: z.number().int().min(1).max(69) }), async (ctx, { wilayaId }) => {
     const cos = await ctx.db.query(
-      `SELECT c.id, c.name, c.kind,
-              (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n,
-              (SELECT f.home FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $1) AS home,
-              (SELECT f.desk FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $1) AS desk
+      `SELECT c.id, c.name, c.kind, (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n
          FROM delivery_companies c WHERE c.active ORDER BY c.name`,
-      [wilayaId],
+    );
+    // a new wilaya (2026): a company without its own price there has its old wilaya's, and its bureaus there count (newwilayas.ts)
+    const here = wilayaAndOld(wilayaId);
+    const F = new Map(
+      withNewWilayas(await ctx.db.query('SELECT company_id, wilaya_id, home, desk FROM delivery_fees WHERE wilaya_id = ANY($1::int[])', [here]))
+        .filter((f: any) => num(f.wilaya_id) === wilayaId)
+        .map((f: any) => [num(f.company_id), f]),
     );
     const companies = cos.map((c: any) => {
       const free = c.kind === 'own' || c.kind === 'manual' || num(c.n) === 0;
-      return { id: num(c.id), name: c.name as string, kind: c.kind as string, home: free || num(c.home) > 0, desk: free || num(c.desk) > 0 };
+      const f: any = F.get(num(c.id));
+      return { id: num(c.id), name: c.name as string, kind: c.kind as string, home: free || num(f?.home) > 0, desk: free || num(f?.desk) > 0 };
     });
     const C = new Map(companies.map((c) => [c.id, c]));
-    const desks = (await ctx.db.query('SELECT id, company_id, commune, name, address FROM stopdesks WHERE wilaya_id = $1 AND gone_at IS NULL ORDER BY name', [wilayaId]))
+    const desks = (await ctx.db.query('SELECT id, company_id, commune, name, address FROM stopdesks WHERE wilaya_id = ANY($1::int[]) AND gone_at IS NULL ORDER BY name', [here]))
       .filter((d: any) => C.has(num(d.company_id)))
       .map((d: any) => ({ id: num(d.id), companyId: num(d.company_id), companyName: C.get(num(d.company_id))!.name, name: d.name as string, commune: d.commune as string, address: d.address as string, served: C.get(num(d.company_id))!.desk }));
     return { companies, desks };

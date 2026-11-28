@@ -12,13 +12,14 @@
 //     Pilotix finds the company's name by itself (same name, sound or Arabic name: couriers/util matchCommune): nobody
 //     links a commune by hand (the owner, 22 Nov 2026).
 // The order card asks the same question (orders.confirmCheck) before the agent presses « Confirmer ».
-import { isAbandonedCheckout, normalizePhone, WILAYAS } from '@pilotix/shared';
+import { isAbandonedCheckout, normalizePhone, wilayaAndOld, WILAYAS } from '@pilotix/shared';
 import type { CourierKind } from '@pilotix/shared';
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
 import { type CommuneName, matchCommune, nearest, ourCommunes } from '../couriers/util';
 import { Db, num, numOrNull } from '../db';
 import { Ctx, proc } from '../rpc';
+import { feeRowOf } from '../newwilayas';
 import { getSetting } from '../settings';
 import { officialCommune } from './coverage';
 import { type Pick, pilotMayRun, pilotPick } from './pilot';
@@ -98,20 +99,20 @@ export async function checkLines(db: Db, lines: CheckLine[], orderId: number | n
   });
 }
 
-/** Does a company serve this wilaya (at home / at a bureau)? Own delivery men, manual companies and companies without a tariff always do. */
+/** Does a company serve this wilaya (at home / at a bureau)? Own delivery men, manual companies and companies without a
+ *  tariff always do. A new wilaya (2026) the company has no price for yet: its old wilaya's price (newwilayas.ts). */
 export async function serves(db: Db, companyId: number, wilayaId: number, desk: boolean): Promise<{ ok: boolean; name: string | null }> {
   const c = (
     await db.query(
-      `SELECT c.name, c.kind, c.active, (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n,
-              (SELECT f.home FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $2) AS home,
-              (SELECT f.desk FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $2) AS desk
+      `SELECT c.name, c.kind, c.active, (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n
          FROM delivery_companies c WHERE c.id = $1`,
-      [companyId, wilayaId],
+      [companyId],
     )
   )[0];
   if (!c) return { ok: false, name: null };
   const free = c.kind === 'own' || c.kind === 'manual' || num(c.n) === 0;
-  return { ok: !!c.active && (free || num(desk ? c.desk : c.home) > 0), name: c.name as string };
+  const f = free ? null : await feeRowOf(db, companyId, wilayaId);
+  return { ok: !!c.active && (free || num(desk ? f?.desk : f?.home) > 0), name: c.name as string };
 }
 
 /** Delivered at a bureau with no bureau chosen while that wilaya has bureaus (of the order's company, or of any active
@@ -120,8 +121,9 @@ async function deskMissing(db: Db, o: { wilayaId: number | null; isStopdesk: boo
   if (!o.isStopdesk || o.stopdeskId || !o.wilayaId) return false;
   const there = await db.query(
     `SELECT 1 FROM stopdesks s JOIN delivery_companies c ON c.id = s.company_id AND c.active
-      WHERE s.wilaya_id = $1 AND s.gone_at IS NULL AND ($2::bigint IS NULL OR s.company_id = $2) LIMIT 1`,
-    [o.wilayaId, o.companyId],
+      WHERE s.wilaya_id = ANY($1::int[]) AND s.gone_at IS NULL AND ($2::bigint IS NULL OR s.company_id = $2) LIMIT 1`,
+    // a new wilaya (2026): the bureaus the companies still keep in its old wilaya count too
+    [wilayaAndOld(o.wilayaId), o.companyId],
   );
   return !!there[0];
 }
@@ -279,7 +281,7 @@ export async function checkOrder(db: Db, orderId: number, ctx?: Ctx) {
       blocker = `${o.ref} : choisissez une variante valide pour chaque produit avant de confirmer.`;
     if (!blocker && !o.is_stopdesk && !officialCommune(num(o.wilaya_id), o.commune))
       blocker = `${o.ref} : choisissez une commune de cette wilaya avant de confirmer.`;
-    if (!blocker && o.is_stopdesk && !(await db.query('SELECT 1 FROM stopdesks WHERE id = $1 AND wilaya_id = $2 AND gone_at IS NULL', [o.stopdesk_id, o.wilaya_id]))[0])
+    if (!blocker && o.is_stopdesk && !(await db.query('SELECT 1 FROM stopdesks WHERE id = $1 AND wilaya_id = ANY($2::int[]) AND gone_at IS NULL', [o.stopdesk_id, wilayaAndOld(num(o.wilaya_id))]))[0])
       blocker = `${o.ref} : choisissez un bureau de livraison dans cette wilaya avant de confirmer.`;
   }
   return { lines, deliver, blocker, noStock: lines.some((l) => l.state === 'empty') };

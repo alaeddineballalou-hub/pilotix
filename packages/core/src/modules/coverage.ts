@@ -9,6 +9,7 @@ import { ALL_WILAYAS, communesOf, normCommune } from '@pilotix/shared';
 import { z } from 'zod';
 import { KINDS } from '../couriers/kinds';
 import { Db, num } from '../db';
+import { withNewWilayas } from '../newwilayas';
 import { Ctx, forbidden, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { deliveryProcs } from './delivery';
@@ -78,7 +79,8 @@ export function officialCommune(wilayaId: number | null | undefined, text: strin
 /** Each company: whether it delivers everywhere by itself, and its prices. */
 async function companiesWithCoverage(db: Db) {
   const cos = await db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY active DESC, id');
-  const fees = await db.query('SELECT company_id, wilaya_id, home, desk FROM delivery_fees');
+  // a new wilaya (2026) a company has no price for yet: its old wilaya's (newwilayas.ts)
+  const fees = withNewWilayas(await db.query('SELECT company_id, wilaya_id, home, desk FROM delivery_fees'));
   return cos.map((c: any) => {
     const cid = num(c.id);
     const mine = fees.filter((f: any) => num(f.company_id) === cid);

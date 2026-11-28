@@ -1,5 +1,6 @@
 import { CallSettings, CustomerMessages, DEFAULT_CALL_SETTINGS, DEFAULT_CUSTOMER_MESSAGES, DEFAULT_SCORE_RULES, PILOT_DEFAULT, type ConfStatus, type PilotConfig, type ScoreRules } from '@pilotix/shared';
 import type { Db } from './db';
+import { effectiveGrid } from './newwilayas';
 
 export interface SuiviMotif {
   key: string;
@@ -421,7 +422,8 @@ export async function setSetting<K extends keyof SettingsMap>(db: Db, key: K, va
 export async function clientFee(db: Db, wilayaId: number, stopdesk: boolean, grid?: string | null): Promise<number | null> {
   const fees = await getSetting(db, 'clientFees');
   const name = grid || (await getSetting(db, 'defaultFeeGrid'));
-  const row = fees[name]?.[String(wilayaId)];
+  // a new wilaya (2026) without its own price: its old wilaya's (newwilayas.ts)
+  const row = effectiveGrid(fees[name])?.[String(wilayaId)];
   if (!row) return null;
   return stopdesk ? row.desk : row.home;
 }
@@ -430,9 +432,10 @@ export async function clientFee(db: Db, wilayaId: number, stopdesk: boolean, gri
 export async function clientHomeFees(db: Db, grid?: string | null): Promise<Record<number, number>> {
   const fees = await getSetting(db, 'clientFees');
   const name = grid || (await getSetting(db, 'defaultFeeGrid'));
+  const g = effectiveGrid(fees[name]);
   const out: Record<number, number> = {};
   for (let w = 1; w <= 69; w++) {
-    const row = fees[name]?.[String(w)];
+    const row = g?.[String(w)];
     if (row && row.home !== null) out[w] = row.home;
   }
   return out;
@@ -440,7 +443,7 @@ export async function clientHomeFees(db: Db, grid?: string | null): Promise<Reco
 
 /** SAV delivery price for a wilaya (null when the SAV tariff has no price there). */
 export async function savFee(db: Db, wilayaId: number, stopdesk: boolean): Promise<number | null> {
-  const row = (await getSetting(db, 'savFees'))[String(wilayaId)];
+  const row = effectiveGrid(await getSetting(db, 'savFees'))[String(wilayaId)];
   if (!row) return null;
   return stopdesk ? row.desk : row.home;
 }

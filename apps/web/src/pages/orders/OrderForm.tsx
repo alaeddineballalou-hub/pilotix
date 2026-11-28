@@ -1,5 +1,5 @@
 // "Nouvelle commande" / "Modifier la commande X" / "Échange pour X" — the .pxo order form of the original app.
-import { CM_CHANNELS, cmOnly, CONF_TODO, isAbandonedCheckout, communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, WILAYAS } from '@pilotix/shared';
+import { CM_CHANNELS, cmOnly, CONF_TODO, isAbandonedCheckout, communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, wilayaAndOld, WILAYAS } from '@pilotix/shared';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PromoField, usePromoCheck } from './PromoField';
@@ -292,7 +292,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   // ---- delivery state ("Livrable : OUI / NON / à compléter")
   const wName = wil === '' ? '' : WILAYAS[wil - 1];
   const desks = data.stopdesks.filter((d) => coId !== null && d.companyId === coId);
-  const desksHere = desks.filter((d) => wil === '' || d.wilayaId === wil);
+  // a new wilaya (2026): the company's bureaus still kept in its old wilaya count too
+  const desksHere = desks.filter((d) => wil === '' || wilayaAndOld(wil).includes(d.wilayaId));
   const ship = (() => {
     const hard: string[] = [];
     const soft: string[] = [];

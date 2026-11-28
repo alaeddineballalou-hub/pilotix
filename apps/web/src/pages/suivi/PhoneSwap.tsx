@@ -1,7 +1,7 @@
 // Swap on a phone: give a cancelled parcel to another customer whose order waits at the depot — the parcel at the
 // top, the customers as big cards (only exactly the same products; same wilaya first; ZR's swap price), « Donner le
 // colis à … » at the thumb; ZR swaps it itself through its API, else each line its courier must change is copied.
-import type { Order } from '@pilotix/shared';
+import { sameOldWilaya, type Order } from '@pilotix/shared';
 import { useTranslation } from 'react-i18next';
 import { da, wilayaName } from '../../lib/format';
 import { trackOf } from '../../lib/items';
@@ -21,7 +21,8 @@ export function SwapPickSheet({ o, onClose, onDone }: { o: Order; onClose: () =>
   const zr = useParcelInfo(o).data;
   const sw = zr?.supported ? zr.info?.swap ?? null : null;
   const co = o.companyName || o.livreurName || t('suivi.swapM.theCompany');
-  const price = (x: Cand) => (sw ? (x.wilayaId === o.wilayaId ? sw.sameCityPrice : sw.differentCityPrice) : null);
+  // a new wilaya (2026) is still its old one for ZR (Bou Saâda 68 = M'Sila 28)
+  const price = (x: Cand) => (sw ? (sameOldWilaya(x.wilayaId, o.wilayaId) ? sw.sameCityPrice : sw.differentCityPrice) : null);
   const card = (x: Cand) => {
     const on = f.pick?.id === x.id;
     const p = price(x);

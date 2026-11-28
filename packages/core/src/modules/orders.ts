@@ -41,6 +41,7 @@ import { CLIENT_FACT_COLS, ClientScore, orderIdsByScore, recordRiskConfirms, sco
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { needRight } from './rights';
 import { clientFee, getSetting } from '../settings';
+import { feeRowOf, feeWilayaSql, withNewWilayas } from '../newwilayas';
 import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
 import { assignNow, getAssign } from './assign';
@@ -1776,7 +1777,7 @@ export async function setCourierCost(db: Db, orderIds: number[], force = false) 
   const rows = await db.query(
     `SELECT o.id, CASE WHEN o.is_stopdesk THEN f.desk ELSE f.home END AS tariff, co.kind, co.config, o.courier_fees,
        (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
-       FROM orders o JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id JOIN delivery_companies co ON co.id = o.company_id
+       FROM orders o JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = ${feeWilayaSql('o.company_id', 'o.wilaya_id')} JOIN delivery_companies co ON co.id = o.company_id
       WHERE o.id = ANY($1) AND NOT o.cashed AND ($2 OR o.delivery_cost = 0)`,
     [orderIds, force],
   );
@@ -2132,7 +2133,8 @@ export async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyR
     if (weightRuleSet(c.kind, c.config)) ruled.add(num(c.id));
   }
   const fees = new Map<string, CompanyRule>();
-  for (const f of await db.query('SELECT company_id, wilaya_id, home, desk, return_fee FROM delivery_fees')) {
+  // a new wilaya (2026) a company has no price for yet: its old wilaya's (newwilayas.ts)
+  for (const f of withNewWilayas(await db.query('SELECT company_id, wilaya_id, home, desk, return_fee FROM delivery_fees'))) {
     const o = over.get(num(f.company_id)) ?? { freeKg: 0, perKg: 0, onReturn: true };
     fees.set(`${num(f.company_id)}:${num(f.wilaya_id)}`, { home: num(f.home), desk: num(f.desk), ret: num(f.return_fee), ...o });
   }
@@ -2226,7 +2228,7 @@ function orderExtraProcs() {
           companyName = co?.name ?? null;
           if (co && co.kind !== 'own' && co.kind !== 'manual') {
             const any = num((await ctx.db.query('SELECT count(*)::int AS n FROM delivery_fees WHERE company_id = $1', [companyId]))[0]?.n);
-            const f = (await ctx.db.query('SELECT home, desk FROM delivery_fees WHERE company_id = $1 AND wilaya_id = $2', [companyId, i.wilayaId]))[0];
+            const f = await feeRowOf(ctx.db, companyId, i.wilayaId);
             if (any > 0) served = !!f && (i.isStopdesk ? num(f.desk) > 0 : num(f.home) > 0);
           }
         }
@@ -2476,7 +2478,7 @@ export const ordersProcs = {
       await ctx.db.query(
         `SELECT o.courier_fees, o.tracking, o.livreur_id, o.is_stopdesk, co.kind, co.config, f.home, f.desk, f.return_fee,
            (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg
-         FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id LEFT JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id
+         FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id LEFT JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = ${feeWilayaSql('o.company_id', 'o.wilaya_id')}
          WHERE o.id = $1`,
         [id],
       )

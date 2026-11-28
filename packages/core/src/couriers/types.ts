@@ -399,6 +399,9 @@ export interface Helpers {
  * Optional methods are missing when the provider has no such API.
  */
 export interface CourierAdapter {
+  /** it finds the new wilayas (2026, 59–69) itself, with its own list (ZR: the wilaya, else the one it was part of);
+   *  without it, a new wilaya reaches the company as its old one (couriers/newwilayas.ts) */
+  knowsNewWilayas?: boolean;
   /** courier status (key or words) → our follow status; null = no change */
   statuses: Record<string, FollowStatus | null>;
   /** a situation the courier adds to its status (ZR: « Commande annulée ») → our follow status, whatever the status, while

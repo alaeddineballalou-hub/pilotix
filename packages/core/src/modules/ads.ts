@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { Db, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
+import { feeWilayaSql } from '../newwilayas';
 import { getRaw, setRaw } from './admin';
 import { leadOf } from './leadkind';
 import { knownKg, ruleFee, swapFeeSql, weightRuleOf, type WeightRule } from './courierfees';
@@ -243,7 +244,7 @@ const MONEY_COLS = `o.id, o.created_at, o.conf_status, o.follow_status, o.total,
             COALESCE(
               CASE WHEN o.courier_fees->>'ret' IS NOT NULL
                    THEN (o.courier_fees->>'ret')::numeric + COALESCE((o.courier_fees->>'weight')::numeric, (o.courier_fees->>'estRet')::numeric, 0) END,
-              (SELECT df.return_fee FROM delivery_fees df WHERE df.company_id = o.company_id AND df.wilaya_id = o.wilaya_id), 0) AS return_fee,
+              (SELECT df.return_fee FROM delivery_fees df WHERE df.company_id = o.company_id AND df.wilaya_id = ${feeWilayaSql('o.company_id', 'o.wilaya_id')}), 0) AS return_fee,
             -- a return priced by the price list: the weight declared, for the company's « Surpoids » on the return
             CASE WHEN o.follow_status IN ('returned', 'lost') AND o.courier_fees->>'ret' IS NULL AND o.livreur_id IS NULL
                  THEN (SELECT COALESCE(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) END AS ret_kg,

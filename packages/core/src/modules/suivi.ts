@@ -20,7 +20,8 @@ import { actedAtSql, relivreSql, relivreurSql } from './alerttouch';
 import { tellGiven, tellTaken } from './inbox';
 import type { ClaimCategory, ClaimFound, ClaimMessage, ClaimSent, ClaimState, ParcelInfo, SwapSent } from '../couriers/types';
 import type { CourierKind } from '@pilotix/shared';
-import { itemsKey, SWAP_API_KINDS, SWAP_SAME_WILAYA_ONLY, swapWayOf, WILAYAS } from '@pilotix/shared';
+import { itemsKey, oldWilaya, sameOldWilaya, SWAP_API_KINDS, SWAP_SAME_WILAYA_ONLY, swapWayOf, wilayaFamily, WILAYAS } from '@pilotix/shared';
+import { withNewWilayas } from '../newwilayas';
 
 const id = z.number().int().positive();
 
@@ -315,7 +316,8 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   const from = await getOrder(ctx, fromId);
   const head = await swapHead(ctx.db, fromId);
   // ZR: a parcel in one of its 11 southern wilayas only goes to a customer of the same wilaya
-  const sameWilayaOnly = head.viaApi && SWAP_SAME_WILAYA_ONLY.includes(from.wilayaId);
+  // « same wilaya » as the company sees it: a new wilaya (2026) is still its old one for a company that counts 58
+  const sameWilayaOnly = head.viaApi && SWAP_SAME_WILAYA_ONLY.includes(oldWilaya(from.wilayaId));
   const products = [...new Set(from.items.map((i) => i.productId))];
   let rows: Order[];
   if (q?.trim()) {
@@ -328,8 +330,8 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
        WHERE o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL AND o.id <> $1
          AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = ANY($2))
          AND NOT EXISTS (SELECT 1 FROM order_items j WHERE j.order_id = o.id AND NOT (j.product_id = ANY($2)))${andSql(swapScopeSql(ctx))}
-       ORDER BY (o.wilaya_id = $3) DESC, o.confirmed_at ASC LIMIT 150`,
-      [fromId, products, from.wilayaId],
+       ORDER BY (o.wilaya_id = ANY($3::int[])) DESC, o.confirmed_at ASC LIMIT 150`,
+      [fromId, products, wilayaFamily(from.wilayaId)],
     );
     rows = [];
     for (const r of ids) rows.push(await getOrder(ctx, num(r.id), ctx.db, swapAccess(ctx)));
@@ -339,7 +341,7 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   const deskCo = new Map<number, number | null>((deskIds.length ? await ctx.db.query('SELECT id, company_id FROM stopdesks WHERE id = ANY($1)', [deskIds]) : []).map((r: any) => [num(r.id), numOrNull(r.company_id)]));
   const deskOk = (x: Order) => !x.isStopdesk || !head.companyId || (!!x.stopdeskId && deskCo.get(x.stopdeskId) === head.companyId);
   // the parcel's company price to each candidate's place (home or bureau), next to what it costs now
-  const fees = from.companyId ? await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id = $1', [from.companyId]) : [];
+  const fees = from.companyId ? withNewWilayas(await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id = $1', [from.companyId])) : [];
   const now = num((await ctx.db.query('SELECT delivery_cost FROM orders WHERE id = $1', [fromId]))[0]?.delivery_cost);
   // what the company itself charges to swap (ZR: same wilaya / another wilaya)
   const sw = from.companyId ? await swapFees(ctx, from.companyId) : { same: null, other: null };
@@ -351,10 +353,10 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   };
   const norm = (c: string | null | undefined) => String(c ?? '').toLowerCase().replace(/[^a-z0-9؀-ۿ]/g, '');
   const list = rows
-    .filter((x) => x.id !== fromId && !x.shippedAt && sameParcel(from, x) && (!sameWilayaOnly || x.wilayaId === from.wilayaId) && deskOk(x))
+    .filter((x) => x.id !== fromId && !x.shippedAt && sameParcel(from, x) && (!sameWilayaOnly || sameOldWilaya(x.wilayaId, from.wilayaId)) && deskOk(x))
     .map((x) => {
       const fee = feeTo(x);
-      const sameWilaya = x.wilayaId === from.wilayaId;
+      const sameWilaya = sameOldWilaya(x.wilayaId, from.wilayaId);
       return { ...x, swapFee: sameWilaya ? sw.same : sw.other, sameWilaya, sameCommune: sameWilaya && !!x.commune && norm(x.commune) === norm(from.commune), sameVariant: true, sameProduct: true, fee, feeDiff: fee !== null && now > 0 ? fee - now : null };
     })
     .sort(
@@ -402,10 +404,10 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
     const head = await swapHead(ctx.db, fromId);
     // what the company takes to give its parcel to another customer (same wilaya or another): counted on the order whose
     // customer did not take it, like a return fee (the owner's rule, 25 Nov 2026) — never on the new order's cost
-    const sameWilaya = fa.wilayaId === fb.wilayaId;
+    const sameWilaya = sameOldWilaya(fa.wilayaId, fb.wilayaId);
     const sw = head.companyId ? await swapFees(ctx, head.companyId) : null;
     const swapFee = (sw ? (sameWilaya ? sw.same : sw.other) : null) ?? 0;
-    if (head.viaApi && !sameWilaya && SWAP_SAME_WILAYA_ONLY.includes(fa.wilayaId))
+    if (head.viaApi && !sameWilaya && SWAP_SAME_WILAYA_ONLY.includes(oldWilaya(fa.wilayaId)))
       throw bad(`${head.companyName} : un colis à ${WILAYAS[fa.wilayaId - 1] ?? fa.wilayaId} ne peut être swappé que dans la même wilaya`);
     if (head.viaApi && fb.isStopdesk) {
       const sd = fb.stopdeskId ? (await ctx.db.query('SELECT company_id FROM stopdesks WHERE id = $1', [fb.stopdeskId]))[0] : null;
