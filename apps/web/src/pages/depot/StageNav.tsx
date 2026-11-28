@@ -51,10 +51,15 @@ export function DepotStageBar({
     if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
     const r = el.getBoundingClientRect();
     const b = on.getBoundingClientRect();
-    if (b.left >= r.left + 8 && b.right <= r.right - 8) return;
-    el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
+    // « Réglages » stays over the end of the bar (sticky), with a fade before it: what is under them is not seen
+    const cfg = el.querySelector<HTMLElement>('.bjm-cfg')?.getBoundingClientRect();
+    const rtl = getComputedStyle(el).direction === 'rtl';
+    const lo = cfg && rtl ? cfg.right + 44 : r.left + 8;
+    const hi = cfg && !rtl ? cfg.left - 44 : r.right - 8;
+    if (b.left >= lo && b.right <= hi) return;
+    el.scrollBy({ left: b.left + b.width / 2 - (lo + hi) / 2 });
     // again once the counts are there: they widen the stages before it (the last one, « Erreurs », left the screen)
-  }, [stage, !!counts]);
+  }, [stage, !!counts, stats]);
   const shown = DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs') && (k !== 'stats' || stats));
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
