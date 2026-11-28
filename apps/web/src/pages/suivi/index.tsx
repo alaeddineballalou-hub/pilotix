@@ -214,6 +214,7 @@ function SuiviBar({ tab, cfgOn = false, statsActive = false }: { tab: Sub; cfgOn
         ) : (
           item(tab, c?.livres ?? 0)
         )}
+        {chart && <span className="bjm-end">{chart}</span>}
       </nav>
     );
   }
