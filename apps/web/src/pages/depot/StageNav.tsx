@@ -52,11 +52,13 @@ export function DepotStageBar({
     if (!el) return;
     const show = () => {
       const on = el.querySelector<HTMLElement>('.bjm-p.on');
-      if (!on || el.scrollWidth <= el.clientWidth + 1) return;
+      // « Statistiques » and « Réglages » are pinned at the end, always in view: nothing to bring
+      if (!on || on.closest('.bjm-end') || el.scrollWidth <= el.clientWidth + 1) return;
       const r = el.getBoundingClientRect();
       const b = on.getBoundingClientRect();
-      // « Réglages » stays over the end of the bar (sticky), with a fade before it: what is under them is not seen
-      const cfg = el.querySelector<HTMLElement>('.bjm-cfg')?.getBoundingClientRect();
+      // « Statistiques » and « Réglages » stay over the end of the bar (sticky), with a fade before them: what is under
+      // them is not seen
+      const cfg = el.querySelector<HTMLElement>('.bjm-end')?.getBoundingClientRect();
       const rtl = getComputedStyle(el).direction === 'rtl';
       const lo = cfg && rtl ? cfg.right + 44 : r.left + 8;
       const hi = cfg && !rtl ? cfg.left - 44 : r.right - 8;
@@ -70,36 +72,43 @@ export function DepotStageBar({
     return () => ro.disconnect();
   }, [stage, !!counts, stats, gear]);
   const shown = DEPOT_STAGES.filter((k) => tabOn('depot', k) && !(noErrors && k === 'erreurs') && (k !== 'stats' || stats));
+  // the steps and « Erreurs de livraison » slide; « Statistiques » is pinned with « Réglages » at the end
+  const steps = shown.filter((k) => k !== 'stats');
+  const statsOn = shown.includes('stats');
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
-      {shown.map((k, i) => (
+      {steps.map((k, i) => (
         <span key={k} style={{ display: 'contents' }}>
-          {/* « Erreurs de livraison » and « Statistiques » are not steps of the parcels: apart, after a line */}
-          {i > 0 && APART.includes(k) && !(k === 'stats' && shown.includes('erreurs')) && <span className="bjm-sep" aria-hidden="true" />}
+          {/* « Erreurs de livraison » is not a step of the parcels: apart, after a line */}
+          {i > 0 && APART.includes(k) && <span className="bjm-sep" aria-hidden="true" />}
           {i > 0 && !APART.includes(k) && (
             <span className={`bjm-ar ${k === 'retours' ? 'bjm-ar2' : ''}`} aria-hidden="true">
               {k === 'retours' ? '⟶' : '›'}
             </span>
           )}
-          {k === 'stats' ? (
-            // « Statistiques »: a chart only (the owner's choice, 28 Nov 2026), so the bar fits a computer's screen
-            <a className={`bjm-p bjm-ico ${stage === k && !cfgOn ? 'on' : ''}`} href="#/depot/stats" aria-label={t(menuTabName('depot', k))} title={t(menuTabName('depot', k))} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
+          <a className={`bjm-p ${stage === k && !cfgOn ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
+            <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
+            {counts && !APART.includes(k) && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
+          </a>
+        </span>
+      ))}
+      {/* « Statistiques » (a chart) and « Réglages » (a gear): pinned together at the end of the bar, always in view,
+          even when the steps slide under them (the owner, 28 Nov 2026); their names are tooltips and for screen readers.
+          « Réglages » (administrators by default; Utilisateurs › Rôles) */}
+      {(statsOn || gear) && (
+        <span className="bjm-end">
+          {statsOn && (
+            <a className={`bjm-p bjm-ico ${stage === 'stats' && !cfgOn ? 'on' : ''}`} href="#/depot/stats" aria-label={t(menuTabName('depot', 'stats'))} title={t(menuTabName('depot', 'stats'))} aria-current={stage === 'stats' && !cfgOn ? 'page' : undefined}>
               <Icon name="chart" />
             </a>
-          ) : (
-            <a className={`bjm-p ${stage === k && !cfgOn ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k && !cfgOn ? 'page' : undefined}>
-              <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(menuTabName('depot', k))}</span>
-              {counts && !APART.includes(k) && <b className={`bjm-n ltr${k === 'prepares' && counts.prepAlerts ? ' bad' : ''}`}>{counts[k] ?? 0}</b>}
+          )}
+          {gear && (
+            <a className={`bjm-p bjm-cfg ${cfgOn ? 'on' : ''}`} href="#/depot/reglages" aria-label={t(menuTabName('depot', 'reglages'))} title={t(menuTabName('depot', 'reglages'))} aria-current={cfgOn ? 'page' : undefined}>
+              <Icon name="settings" />
+              <span className="bjm-l">{t(menuTabName('depot', 'reglages'))}</span>
             </a>
           )}
         </span>
-      ))}
-      {/* « Réglages »: apart at the end, with a gear (administrators by default; Utilisateurs › Rôles) */}
-      {gear && (
-        <a className={`bjm-p bjm-cfg ${cfgOn ? 'on' : ''}`} href="#/depot/reglages" aria-label={t(menuTabName('depot', 'reglages'))} title={t(menuTabName('depot', 'reglages'))} aria-current={cfgOn ? 'page' : undefined}>
-          <Icon name="settings" />
-          <span className="bjm-l">{t(menuTabName('depot', 'reglages'))}</span>
-        </a>
       )}
     </nav>
   );

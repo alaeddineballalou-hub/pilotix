@@ -149,9 +149,17 @@
 .px-wide .pxt-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .px-wide .pxt-tools .bjsc { margin: 0; }
 
-/* Dépôt's bar (the owner's choice, 28 Nov 2026): « Statistiques » and « Réglages » are icons only, so the steps,
-   « Erreurs de livraison » and both fit a computer's screen; their names stay as tooltips and for screen readers */
-.bjm-bar .bjm-p.bjm-ico { padding-inline: 11px; }
+/* Dépôt's bar (the owner's choices, 28 Nov 2026): « Statistiques » and « Réglages » are icons only, pinned together at
+   the end of the bar and always in view, even when the steps and « Erreurs de livraison » slide under them; their names
+   stay as tooltips and for screen readers */
+.bjm-bar .bjm-end { flex: none; display: flex; align-items: center; gap: 6px; margin-inline-start: auto; position: sticky; inset-inline-end: 0; z-index: 3; background: var(--surface); }
+.bjm-bar[data-fade~="e"] .bjm-end::before { content: ''; position: absolute; top: -7px; bottom: -7px; inset-inline-end: calc(100% + 1px); width: 44px; pointer-events: none; background: linear-gradient(270deg, var(--surface) 25%, transparent); }
+[dir="rtl"] .bjm-bar[data-fade~="e"] .bjm-end::before { background: linear-gradient(90deg, var(--surface) 25%, transparent); }
+/* in the pair, the gear is no longer pinned on its own (ux.css) and the fade is the pair's */
+.bjm-bar .bjm-end .bjm-p.bjm-cfg { position: static; margin-inline-start: 0; }
+.bjm-bar[data-fade~="e"] .bjm-end .bjm-p.bjm-cfg::before { content: none; }
+/* the chart: the same outlined button as the gear */
+.bjm-bar .bjm-p.bjm-ico { padding-inline: 11px; border: 1px solid var(--line); }
 .bjm-bar .bjm-p.bjm-ico .bji { width: 17px; height: 17px; }
 .bjm-bar[data-g="depot"] .bjm-p.bjm-cfg { padding-inline: 11px; }
 .bjm-bar[data-g="depot"] .bjm-p.bjm-cfg .bjm-l { display: none; }
