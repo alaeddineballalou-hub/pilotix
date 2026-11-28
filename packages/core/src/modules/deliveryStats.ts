@@ -43,7 +43,8 @@ async function deliveryStats(ctx:Ctx,i:z.infer<typeof input>) {
   const scope=queueSql(ctx,'follow');
   // A manager's statistics contain only assigned orders in their follow-up teams, not the free queue.
   const manager=agencyOf(ctx)===null&&!ctx.session.isAdmin&&!ctx.session.roles.includes('vendeur');
-  const managed=manager ? [...new Set([ctx.session.profile.id,...teams.filter(t=>t.managerId===ctx.session.profile.id).flatMap(t=>t.agentIds)])] : [];
+  const restricted=manager||ctx.deliveryStatsRestricted===true;
+  const managed=ctx.deliveryStatsRestricted ? [...new Set([ctx.session.profile.id,...(ctx.deliveryStatsTeams??[]).flatMap(t=>t.agentIds)])] : manager ? [...new Set([ctx.session.profile.id,...teams.filter(t=>t.managerId===ctx.session.profile.id).flatMap(t=>t.agentIds)])] : [];
   const rows=await ctx.db.query(`SELECT o.id,o.follow_status,o.sub_status,o.ext_status,o.shipped_at,o.delivered_at,o.delivery_attempts,
     o.follow_agent_id,o.follow_agency_id,o.company_id,co.name AS company_name,o.livreur_id,
     COALESCE(o.route_product_id, it.product_id) AS product_id,COALESCE(p.name,it.name) AS product_name,
@@ -54,14 +55,15 @@ async function deliveryStats(ctx:Ctx,i:z.infer<typeof input>) {
     LEFT JOIN LATERAL (SELECT product_id,name FROM order_items WHERE order_id=o.id ORDER BY is_upsell,id LIMIT 1) it ON true
     LEFT JOIN products p ON p.id=COALESCE(o.route_product_id,it.product_id)
     WHERE o.shipped_at >= $1 AND o.shipped_at < $2${andSql(scope)}
-    ${manager?' AND o.follow_agent_id = ANY($3::bigint[])':''}`,
-    [new Date(a).toISOString(),new Date(b).toISOString(),...(manager?[managed]:[])]);
+    ${restricted?' AND o.follow_agent_id = ANY($3::bigint[])':''}`,
+    [new Date(a).toISOString(),new Date(b).toISOString(),...(restricted?[managed]:[])]);
   const grouped=new Map<string,DeliveryStatsRow>();
   for(const o of rows) {
     const product={key:String(o.product_id??'none'),name:String(o.product_name??'Sans produit')};
     const company={key:String(o.company_id??(o.livreur_id?'own':'none')),name:String(o.company_name??(o.livreur_id?'Livreurs internes':'Sans société'))};
     const t=teams.find(t=>t.agentIds.includes(Number(o.follow_agent_id))||t.managerId===Number(o.follow_agent_id));
-    const team=o.follow_agency_id ? {key:'agency:'+o.follow_agency_id,name:'Agence #'+o.follow_agency_id} : t ? {key:t.id,name:t.name} : {key:'none',name:'Non assigné'};
+    const agencyTeam=ctx.deliveryStatsTeams?.find(t=>t.agentIds.includes(Number(o.follow_agent_id)));
+    const team=agencyTeam ? {key:agencyTeam.id,name:agencyTeam.name} : o.follow_agency_id ? {key:'agency:'+o.follow_agency_id,name:'Agence #'+o.follow_agency_id} : t ? {key:t.id,name:t.name} : {key:'none',name:'Non assigné'};
     const k=JSON.stringify([product.key,company.key,team.key]);
     let row=grouped.get(k);
     if(!row){row={product,company,team,totals:blankDeliveryTotals()};grouped.set(k,row);}
