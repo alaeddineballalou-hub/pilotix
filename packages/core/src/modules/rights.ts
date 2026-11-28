@@ -237,6 +237,14 @@ export async function sessionWithRights<S extends Session>(db: Db, session: S, s
 // ---------------------------------------------------------------- the server's check of every call
 type Need = string | readonly string[] | ((input: any, ctx: Ctx) => string | readonly string[] | null);
 
+/**
+ * Confirmation › Statistiques: the dashboard's Confirmation tab, for the owner, the administrators and the agent managers.
+ * An agency's chief and its chefs d'équipe reach them too inside a store, with the confirmation role there (28 Nov 2026;
+ * rightsGate leaves partners alone): a store's plain agent passes the role check that way, and the action itself
+ * refuses him (confirmation.ts › needStats), so no right is asked of him.
+ */
+const confStats: Need = (_i, ctx) => (ctx.session.isAdmin || ctx.session.roles.includes('agent_manager') || ctx.session.roles.includes('vendeur') ? 'tab:dashboard/confirmation' : null);
+
 const BAD_CONF = new Set(['cancelled', 'duplicate', 'wrong_number', 'fake']);
 /** Suivi's list tabs, as the menu names them ('alertes_new', 'alertes_encours': the « Alertes » tab); one it does not know
  *  is a right nobody has */
@@ -441,13 +449,13 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'stats.dashLivreurs': 'tab:dashboard/livreurs',
   'stats.dashSav': 'tab:dashboard/sav',
   'confirmation.firstCall': 'tab:dashboard/confirmation',
-  'confirmation.nouvelles': 'tab:dashboard/confirmation',
+  'confirmation.nouvelles': confStats,
   'confirmation.period': 'tab:dashboard/confirmation',
   'confirmation.delivery': 'tab:dashboard/confirmation',
-  'confirmation.enCours': 'tab:dashboard/confirmation',
+  'confirmation.enCours': confStats,
   'confirmation.confirmed': 'tab:dashboard/confirmation',
   'confirmation.overview': 'tab:dashboard/confirmation',
-  'confirmation.confirmees': 'tab:dashboard/confirmation',
+  'confirmation.confirmees': confStats,
   'confirmation.riskStats': 'tab:dashboard/confirmation',
 };
 

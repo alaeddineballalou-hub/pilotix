@@ -238,6 +238,8 @@ html[data-theme="dark"] .px-sx-tile.main .lb .px-help { background: rgba(15, 26,
 .px-sx-fb .px-sx-seg button { padding: 0 14px; }
 .px-sx-seg button.on { background: var(--navy); color: var(--on-navy); }
 .px-sx-sec .px-sx-seg button { padding: 3px 11px; font-size: 12.5px; }
+/* a table's title with its choice on the right (« Par agent / Par vendeur », « Par produit »…) */
+.px-sx-sec.row { justify-content: space-between; flex-wrap: wrap; }
 select.px-sx-pill { width: auto !important; max-width: 176px !important; height: 36px !important; min-height: 36px !important; padding: 0 32px 0 14px !important; border: 1px solid var(--line); border-radius: 999px !important; background-color: var(--surface); color: var(--ink); font-size: 13px !important; font-weight: 500; }
 /* the dates: one pill for the period, one « Personnalisé »; the calendar opens from their left edge, inside the card */
 .px-sx-fb .px-dr { display: inline-flex; gap: 8px; }

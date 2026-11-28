@@ -291,6 +291,11 @@ const savRole: Gate = async (ctx) => {
   if (!ctx.session.roles.includes('sav')) throw forbidden('Le SAV n’est pas confié à votre rôle');
 };
 
+/** The agency's chief and its chefs d'équipe only (a plain agent never sees the team's numbers). */
+const lead: Gate = (ctx) => {
+  if (!agencyLead(ctx)) throw forbidden('Réservé au chef de l’agence et à ses chefs d’équipe');
+};
+
 export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'me.get': free,
   'me.language': free,
@@ -335,6 +340,11 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   // (the column presets are the agency's own, never the store's: AGENCY_COL_PRESETS, in the agency's space)
   'confirmation.counts': free,
   'confirmation.list': free,
+  // Confirmation › Statistiques (Nouvelles, En cours, Confirmées): the agency's chief and its chefs d'équipe, on the
+  // agency's orders and people — one seller, or every seller together (owner's choice, 28 Nov 2026: every view)
+  'confirmation.nouvelles': lead,
+  'confirmation.enCours': lead,
+  'confirmation.confirmees': lead,
   'confirmation.catalog': free,
   'catalog.assigned': free,
   // a product's sales guide during the call (the proc keeps to the agency's products)

@@ -149,8 +149,18 @@ export function Confirmation(p: PageProps) {
 }
 const AllConf = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesConfirmation })));
 
+/** « Liste » / « Statistiques » of Confirmées, the choice kept on this device. */
+export function useConfirmedView() {
+  const [cview, setCviewState] = useState<'list' | 'stats'>(() => (store.get('conf-confirmees-view') === 'stats' ? 'stats' : 'list'));
+  const setCview = (v: 'list' | 'stats') => {
+    setCviewState(v);
+    store.set('conf-confirmees-view', v === 'stats' ? v : null);
+  };
+  return [cview, setCview] as const;
+}
+
 /** « Liste » / « Statistiques » at the top of Confirmées, for managers (the agents only have the list) */
-function ConfirmedView({ view, onChange }: { view: 'list' | 'stats'; onChange: (v: 'list' | 'stats') => void }) {
+export function ConfirmedView({ view, onChange }: { view: 'list' | 'stats'; onChange: (v: 'list' | 'stats') => void }) {
   const { t } = useTranslation();
   return (
     <div className="px-vsw cf-view" role="radiogroup" aria-label={t('confirmation.cview.label')}>
@@ -169,10 +179,11 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const { session } = useSession();
   const counts = useRpc('confirmation.counts', {}, { refetchInterval: 60_000 });
   // the three views (lib/session › confViewOf): « Statistiques » for the Super admin view (the shop's numbers) and the
-  // Admin view (his team's: the same orders as his list, 27 Nov 2026); an agency's chiefs not yet (their agency's numbers
-  // need their own counts on the server)
+  // Admin view (his team's: the same orders as his list, 27 Nov 2026) — an agency's chief and its chefs d'équipe too,
+  // on the agency's orders and people (owner's choice, 28 Nov 2026: every view, every screen)
   const view = useConfView();
-  const manager = view !== 'agent' && !session?.profile.agencyId;
+  const stats = view !== 'agent';
+  const manager = stats && !session?.profile.agencyId;
   const c = counts.data;
   // the menu's tabs; « Terminées » only while on it (reached from the numbers); « Réglages » apart at the end, with a gear
   const items = MENU_TABS.confirmation.filter((k) => k !== 'reglages' && (k !== 'terminees' || sub === 'terminees') && tabOn('confirmation', k)).map((k) => ({ key: k, label: t(menuTabName('confirmation', k)), href: `#/confirmation/${k}`, count: c?.[k as Sub] }));
@@ -181,13 +192,8 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const mine = !!session?.isAdmin || !!session?.profile.canAffect || manager;
   const cfg = tabOn('confirmation', 'reglages') && mine ? { key: 'reglages', label: t(menuTabName('confirmation', 'reglages')), href: '#/confirmation/reglages' } : null;
   const focusId = rest?.[0] ? Number(rest[0]) : null;
-  // phones: the queue comes first; the big statistics stay on tablets and computers
-  const phone = useIsPhone();
-  const [cview, setCviewState] = useState<'list' | 'stats'>(() => (store.get('conf-confirmees-view') === 'stats' ? 'stats' : 'list'));
-  const setCview = (v: 'list' | 'stats') => {
-    setCviewState(v);
-    store.set('conf-confirmees-view', v === 'stats' ? v : null);
-  };
+  // (phones too, since 28 Nov 2026: the owner's « all devices »; before, they stayed on tablets and computers)
+  const [cview, setCview] = useConfirmedView();
   // Confirmées: one stage of the dépôt at a time (all when none) — its counters over the list (Queue › stageCtl)
   const [stage, setStage] = useState<ConfStage | null>(null);
   const stageCtl = { counts: c?.stages, onChange: setStage };
@@ -202,7 +208,7 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   return (
     <>
       <StageBar items={items} current={sub} end={cfg} />
-      {sub === 'confirmees' && manager ? (
+      {sub === 'confirmees' && stats ? (
         // managers: « Confirmées » is the list (as for the agents) or its statistics, the choice kept on this device
         <>
           <ConfirmedView view={cview} onChange={setCview} />
@@ -214,7 +220,7 @@ function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
         </>
       ) : (
         <>
-          {manager && !phone && <StatsSection sub={sub} />}
+          {stats && <StatsSection sub={sub} />}
           <Queue key={sub} sub={sub} focusId={focusId} stage={sub === 'confirmees' ? stage : null} stageCtl={sub === 'confirmees' ? stageCtl : undefined} />
         </>
       )}

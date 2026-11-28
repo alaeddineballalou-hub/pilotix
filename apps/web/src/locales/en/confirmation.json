@@ -1127,7 +1127,10 @@
     "hConverted": "Share of first calls that confirmed the order.",
     "hWaiting": "Orders not called yet, right now.",
     "hLate": "Orders not called yet whose first-call deadline has passed.",
-    "hNoAgent": "Orders not called yet that no agent has: to give to an agent."
+    "hNoAgent": "Orders not called yet that no agent has: to give to an agent.",
+    "bySeller": "Each seller · today · tap a seller to open its numbers",
+    "cSeller": "Seller",
+    "allSellers": "All sellers"
   },
   "cfs": {
     "created": "Date de création",
@@ -1188,7 +1191,8 @@
     "noTeam": "No team",
     "noAgent": "Not assigned",
     "few": "Under 20 leads: too few to judge",
-    "empty": "No order in this period."
+    "empty": "No order in this period.",
+    "bySeller": "Per seller"
   },
   "ecs": {
     "calls": "Calls today",

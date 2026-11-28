@@ -257,6 +257,140 @@ export const ICONS_FAN: Fan = {
   },
 };
 
+// ---------------------------------------------------------------- Confirmation › Statistiques of an agency (28 Nov 2026)
+// « Tous les vendeurs » of an agency's chief (owner's choice, 28 Nov 2026: the statistics for every view): every
+// seller's numbers added up, each agent once (his id in the agency, the same in every store), and each seller side by
+// side (« Par vendeur »). A median is made again from every first call's minutes (`ds`), never an average of medians.
+
+/** The middle value (as confirmation.ts: the upper one of two). */
+const middle = (xs: number[]) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+};
+/** Lines of several shops added up, key by key; with each call's minutes (`ds`), their median again (left out after). */
+function addUp(list: any[], keys: readonly string[]): any {
+  const got = list.filter((x) => x && typeof x === 'object');
+  const out: any = Object.fromEntries(keys.map((k) => [k, got.reduce((n, x) => n + num(x[k]), 0)]));
+  if (got.some((x) => 'median' in x)) out.median = got.length === 1 && !Array.isArray(got[0].ds) ? got[0].median : middle(got.flatMap((x) => (Array.isArray(x.ds) ? x.ds : [])));
+  return out;
+}
+/** Each agent over every seller: one person (his id in the agency) is one line. */
+function addAgents(parts: Part[], keys: readonly string[], first: string): any[] {
+  const m = new Map<number, any[]>();
+  for (const p of parts)
+    for (const a of p.out?.agents ?? []) {
+      if (!m.has(a.id)) m.set(a.id, []);
+      m.get(a.id)!.push(a);
+    }
+  return [...m.values()].map((xs) => ({ id: xs[0].id, name: xs[0].name, ...addUp(xs, keys) })).sort((a, b) => b[first] - a[first] || String(a.name).localeCompare(String(b.name)));
+}
+/** The load: the orders added up ÷ the agents who worked, each once over every seller. */
+function loadOver(list: any[], orders: 'orders' | 'leads'): any {
+  const got = list.filter(Boolean);
+  if (!got.length) return null;
+  return { [orders]: got.reduce((n, x) => n + num(x[orders]), 0), agents: new Set(got.flatMap((x) => (Array.isArray(x.ids) ? x.ids : []))).size };
+}
+const NV_SUM = ['received', 'called', 'under5', 'onTime', 'reached', 'converted'] as const;
+const EC_SUM = ['calls', 'onTime', 'confirmed', 'saidNo', 'never', 'tries'] as const;
+const CF_SUM = ['leads', 'qualified', 'confirmed', 'upsell', 'shipped', 'delivered'] as const;
+const sellerLine = (p: Part) => ({ key: `s${p.seller.id}`, id: p.seller.id, kind: 'seller' as const, name: p.seller.name });
+
+/** Nouvelles › Statistiques. */
+export const NV_FAN: Fan = {
+  merge: (parts) => {
+    const outs = parts.map((p) => p.out).filter(Boolean);
+    const today = addUp(outs.map((o) => o.today), NV_SUM);
+    const live = sumDeep(outs.map((o) => o.live)) ?? { waiting: 0, late: 0, noAgent: 0 };
+    const perAgent = loadOver(outs.map((o) => o.perAgent), 'orders');
+    return {
+      firstMinutes: outs[0]?.firstMinutes ?? null,
+      today,
+      prev: addUp(outs.map((o) => o.prev), NV_SUM),
+      live,
+      agents: addAgents(parts, [...NV_SUM.filter((k) => k !== 'received'), 'late'], 'called'),
+      agentsTotal: addUp(outs.map((o) => o.agentsTotal), NV_SUM),
+      director: false,
+      team: null,
+      perAgent,
+      perAgentPrev: loadOver(outs.map((o) => o.perAgentPrev), 'orders'),
+      teams: null,
+      allTeams: null,
+      agency: outs.some((o) => o.agency),
+      sellers: parts.map((p) => ({ ...sellerLine(p), ...addUp([p.out.today], NV_SUM), agents: p.out.perAgent?.agents ?? null, late: num(p.out.live?.late), unassigned: num(p.out.live?.noAgent) })),
+      allSellers: { key: 'all', kind: 'seller', name: '', ...today, agents: perAgent?.agents ?? null, late: num(live.late), unassigned: num(live.noAgent) },
+    };
+  },
+};
+
+/** En cours › Statistiques. */
+export const EC_FAN: Fan = {
+  merge: (parts) => {
+    const outs = parts.map((p) => p.out).filter(Boolean);
+    const today = addUp(outs.map((o) => o.today), EC_SUM);
+    const live = sumDeep(outs.map((o) => o.live)) ?? { inProgress: 0, value: 0, late: 0, dueHour: 0 };
+    const perAgent = loadOver(outs.map((o) => o.perAgent), 'orders');
+    return {
+      today,
+      prev: addUp(outs.map((o) => o.prev), EC_SUM),
+      live,
+      agents: addAgents(parts, [...EC_SUM, 'late'], 'calls'),
+      agentsTotal: addUp(outs.map((o) => o.agentsTotal), EC_SUM),
+      director: false,
+      team: null,
+      perAgent,
+      teams: null,
+      allTeams: null,
+      agency: outs.some((o) => o.agency),
+      sellers: parts.map((p) => ({ ...sellerLine(p), ...addUp([p.out.today], EC_SUM), agents: p.out.perAgent?.agents ?? null, inProgress: num(p.out.live?.inProgress), late: num(p.out.live?.late) })),
+      allSellers: { key: 'all', kind: 'seller', name: '', ...today, agents: perAgent?.agents ?? null, inProgress: num(live.inProgress), late: num(live.late) },
+    };
+  },
+};
+
+/**
+ * Confirmées › Statistiques: the table per agent (each person once), per product (each seller's own products, named
+ * with their seller) or per seller. The product filter needs one seller (a product is one store's).
+ */
+export const CF_FAN: Fan = {
+  input: (i) => ({ ...i, by: i?.by === 'seller' ? 'people' : i?.by, product: undefined }),
+  merge: (parts, i) => {
+    const outs = parts.map((p) => p.out).filter(Boolean);
+    const reasons = new Map<string, number>();
+    for (const o of outs) for (const r of o.reasons ?? []) reasons.set(String(r.code), (reasons.get(String(r.code)) ?? 0) + num(r.n));
+    const by = i?.agent ? 'product' : i?.by === 'seller' ? 'seller' : i?.by === 'product' ? 'product' : 'people';
+    let table: any[];
+    if (by === 'seller') table = parts.map((p) => ({ ...sellerLine(p), agents: p.out.perAgent?.agents ?? null, ...addUp([p.out.sum], CF_SUM) }));
+    else if (by === 'product') table = parts.flatMap((p) => (p.out.table ?? []).map((r: any) => ({ ...r, key: `s${p.seller.id}${r.key}`, name: `${r.name} · ${p.seller.name}` })));
+    else {
+      const m = new Map<string, any[]>();
+      for (const o of outs)
+        for (const r of o.table ?? []) {
+          if (!m.has(r.key)) m.set(r.key, []);
+          m.get(r.key)!.push(r);
+        }
+      table = [...m.values()].map((xs) => ({ key: xs[0].key, name: xs[0].name, ...(xs[0].kind ? { kind: xs[0].kind } : {}), ...addUp(xs, CF_SUM) }));
+    }
+    table.sort((a, b) => (a.kind === 'none' ? 1 : 0) - (b.kind === 'none' ? 1 : 0) || b.leads - a.leads || String(a.name).localeCompare(String(b.name)));
+    const agents = new Map<number, string>();
+    for (const o of outs) for (const a of o.agents ?? []) if (!agents.has(a.id)) agents.set(a.id, a.name);
+    return {
+      director: false,
+      teams: null,
+      team: null,
+      agents: [...agents].map(([id, name]) => ({ id, name })).sort((a, b) => String(a.name).localeCompare(String(b.name))),
+      products: [],
+      sum: addUp(outs.map((o) => o.sum), CF_SUM),
+      perAgent: loadOver(outs.map((o) => o.perAgent), 'leads'),
+      reasons: [...reasons].map(([code, n]) => ({ code, n })).sort((a, b) => b.n - a.n),
+      by,
+      table,
+      agency: outs.some((o) => o.agency),
+      bySeller: true,
+    };
+  },
+};
+
 export const FANOUT: Record<string, Fan> = {
   // Commandes › Toutes les commandes, Livré, Annulé of an agency's « Tous les vendeurs »: every seller's orders in one list
   'orders.list': ORDERS_FAN,
@@ -310,6 +444,10 @@ export const FANOUT: Record<string, Fan> = {
     },
   },
   'confirmation.banner': BANNER_FAN,
+  // Confirmation › Statistiques of an agency's chief, every seller together
+  'confirmation.nouvelles': NV_FAN,
+  'confirmation.enCours': EC_FAN,
+  'confirmation.confirmees': CF_FAN,
   // Terminé › Annulé: « Raisons des annulations » of every seller together
   'orders.cancelReport': CANCEL_REPORT_FAN,
   'suivi.list': {

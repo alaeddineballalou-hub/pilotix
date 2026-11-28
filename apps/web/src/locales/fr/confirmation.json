@@ -1127,7 +1127,10 @@
     "hConverted": "Part des 1ers appels qui ont confirmé la commande.",
     "hWaiting": "Commandes pas encore appelées, en ce moment.",
     "hLate": "Commandes pas encore appelées dont l’heure limite du 1er appel est passée.",
-    "hNoAgent": "Commandes pas encore appelées qu’aucun agent n’a encore : à donner à un agent."
+    "hNoAgent": "Commandes pas encore appelées qu’aucun agent n’a encore : à donner à un agent.",
+    "bySeller": "Chaque vendeur · aujourd’hui · touchez un vendeur pour ouvrir ses chiffres",
+    "cSeller": "Vendeur",
+    "allSellers": "Tous les vendeurs"
   },
   "cfs": {
     "created": "Date de création",
@@ -1188,7 +1191,8 @@
     "noTeam": "Sans équipe",
     "noAgent": "Non assignées",
     "few": "Moins de 20 leads : trop peu pour juger",
-    "empty": "Aucune commande sur cette période."
+    "empty": "Aucune commande sur cette période.",
+    "bySeller": "Par vendeur"
   },
   "ecs": {
     "calls": "Appels aujourd’hui",

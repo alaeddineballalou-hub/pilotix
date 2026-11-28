@@ -8,10 +8,11 @@ import { rpc } from '../../lib/backend';
 import { useRpc, useRpcFor } from '../../lib/query';
 import { SellerScope, setSeller, useSeller } from '../../lib/seller';
 import { useSellers } from '../../lib/sellers';
-import { AgentView, useSession } from '../../lib/session';
+import { AgentView, useConfView, useSession } from '../../lib/session';
 import { Empty, Icon, Loading, StageBar } from '../../ui/kit';
 import { toast } from '../../ui/toast';
-import { Confirmation, Queue } from '../confirmation';
+import { Confirmation, ConfirmedView, Queue, useConfirmedView } from '../confirmation';
+import { ConfirmedStatsPage, StatsSection } from '../confirmation/Stats';
 import { Focus } from '../confirmation/Focus';
 import type { PageProps } from '../registry';
 import { Commandes, DoneScreen } from '../orders';
@@ -147,14 +148,32 @@ export function AllConfirmation({ sub: raw, scope }: PageProps & { scope?: AllSc
   const { t } = useTranslation();
   const sub: Sub = SUBS.includes(raw as Sub) ? (raw as Sub) : 'nouvelles';
   const c = useRpc('confirmation.counts', (scope?.counts ?? {}) as never, { refetchInterval: 60_000 }).data;
+  // « Statistiques » of the agency's chief and its chefs d'équipe: every seller together, each agent once, « Par
+  // vendeur » (owner's choice, 28 Nov 2026: every view); the agents only have the list
+  const view = useConfView();
+  const stats = !scope && view !== 'agent';
+  const [cview, setCview] = useConfirmedView();
+  const queue = (
+    <Queue key={sub} sub={sub} focusId={null} combined={{
+      agency: !scope, chip: scope?.chip ?? <span className="chip agx-all-chip"><Icon name="store" /> {t('agency.pick.allShort')}</span>,
+      bar: scope?.bar, input: scope?.input, source: scope?.tag,
+      next: (onClose) => <FocusAll onClose={onClose} scope={scope} />,
+    }} />
+  );
   return (
     <>
       <StageBar items={SUBS.map((k) => ({ key: k, label: t(`confirmation.sub.${k}`), href: `#/confirmation/${k}`, count: c?.[k] }))} current={sub} />
-      <Queue key={sub} sub={sub} focusId={null} combined={{
-        agency: !scope, chip: scope?.chip ?? <span className="chip agx-all-chip"><Icon name="store" /> {t('agency.pick.allShort')}</span>,
-        bar: scope?.bar, input: scope?.input, source: scope?.tag,
-        next: (onClose) => <FocusAll onClose={onClose} scope={scope} />,
-      }} />
+      {stats && sub === 'confirmees' ? (
+        <>
+          <ConfirmedView view={cview} onChange={setCview} />
+          {cview === 'stats' ? <ConfirmedStatsPage /> : queue}
+        </>
+      ) : (
+        <>
+          {stats && <StatsSection sub={sub} />}
+          {queue}
+        </>
+      )}
     </>
   );
 }

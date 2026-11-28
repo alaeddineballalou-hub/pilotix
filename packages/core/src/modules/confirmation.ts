@@ -219,6 +219,22 @@ async function names(db: Db): Promise<Map<number, string>> {
   return new Map(rows.map((r: any) => [num(r.id), r.name as string]));
 }
 
+/**
+ * An agency's chief or one of its chefs d'équipe, in a store (owner's choice, 28 Nov 2026: the statistics for every
+ * view): his agency's orders are his team's, its people his agents — each one by his id in the agency (the same in
+ * every seller's store, so « Tous les vendeurs » adds a person up once: fanout.ts). null: anyone else.
+ */
+async function agencyPeople(ctx: Ctx): Promise<Map<number, number> | null> {
+  if (!agencyLead(ctx)) return null;
+  const rows = await ctx.db.query('SELECT id, agency_profile_id FROM profiles WHERE agency_id = $1', [agencyOf(ctx)]);
+  return new Map(rows.map((r: any) => [num(r.id), r.agency_profile_id === null || r.agency_profile_id === undefined ? num(r.id) : num(r.agency_profile_id)]));
+}
+
+/** The statistics: the owner, the administrators and the agent managers — and an agency's chief and chefs d'équipe. */
+function needStats(ctx: Ctx) {
+  if (!ctx.session.isAdmin && !hasRole(ctx.session, ...MGR) && !agencyLead(ctx)) throw forbidden();
+}
+
 const MGR = ['agent_manager', 'vendeur'] as const;
 const CANCELLED_LIKE = ['cancelled', 'fake', 'wrong_number', 'duplicate'];
 
@@ -539,6 +555,8 @@ export interface NvSum {
   reached: number;
   /** first calls that confirmed the order */
   converted: number;
+  /** an agency's chief: each first call's minutes (« Tous les vendeurs » makes the median of every seller's again) */
+  ds?: number[];
 }
 export interface NvAgent extends Omit<NvSum, 'received'> {
   id: number;
@@ -548,8 +566,10 @@ export interface NvAgent extends Omit<NvSum, 'received'> {
 }
 export interface NvTeam extends NvSum {
   key: string;
-  /** 'none': what no team has (orders with no agent yet, people in no team) */
-  kind: 'team' | 'agency' | 'none';
+  /** 'none': what no team has (orders with no agent yet, people in no team); 'seller': a seller of an agency */
+  kind: 'team' | 'agency' | 'none' | 'seller';
+  /** a seller's store id (an agency's « Par vendeur ») */
+  id?: number;
   name: string;
   /** agents who made a first call today (null: an agency — its agents stay private) */
   agents: number | null;
@@ -585,6 +605,10 @@ async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
   const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
   const T = director ? await getSetting(ctx.db, 'teams') : [];
   const { opened, membersOf, inView } = teamView(T, director ? i.team : undefined);
+  // an agency's chief or chef d'équipe: his agency's orders and people are his team's (AP: their ids in the agency)
+  const AP = await agencyPeople(ctx);
+  const ownA = AP ? agencyOf(ctx) : null;
+  const ours = (by: number) => !AP || AP.has(by);
   const rows = await ctx.db.query(
     `SELECT id, created_at, assigned_at, agent_id, conf_status, conf_agency_id FROM sales
       WHERE (created_at >= $1 OR conf_status IN ('new','to_check'))${statsSql(ctx, 'sales')}`,
@@ -640,6 +664,7 @@ async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
       median: median(ds),
       reached: cs.filter((c) => c.reached).length,
       converted: cs.filter((c) => c.converted).length,
+      ...(AP ? { ds } : {}),
     };
   };
   const inW = (w: { a: number; b: number }, t: number) => t >= w.a && t < w.b;
@@ -653,22 +678,32 @@ async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
     .map((o) => ({ agentId: o.agentId, agencyId: agencyOfOrder.get(o.id) ?? null, late: now > (dueW.get(o.id)!.at ?? o.start) }))
     .filter((w) => inView(w.agentId, w.agencyId));
   const live = { waiting: waiting.length, late: waiting.filter((w) => w.late).length, noAgent: waiting.filter((w) => w.agentId === null).length };
-  // one line per agent: the store's own agents (an agency's agents stay private: never a line here)
+  // one line per agent: the store's own agents (an agency's agents stay private: never a line here) — for an agency's
+  // chief, his agency's agents
   const who = await names(ctx.db);
-  const today = made.filter((c) => inW(W0, c.at) && c.agencyId === null);
-  const ids = new Set<number>([...today.map((c) => c.by), ...waiting.filter((w) => w.late && w.agentId !== null && w.agencyId === null).map((w) => w.agentId!)]);
+  const today = made.filter((c) => inW(W0, c.at) && c.agencyId === ownA && ours(c.by));
+  const ids = new Set<number>([...today.map((c) => c.by), ...waiting.filter((w) => w.late && w.agentId !== null && w.agencyId === ownA && ours(w.agentId)).map((w) => w.agentId!)]);
   const agents: NvAgent[] = [...ids]
     .map((id) => {
       const x = sumOf(today.filter((c) => c.by === id), 0);
-      return { id, name: who.get(id) ?? '—', called: x.called, under5: x.under5, onTime: x.onTime, median: x.median, reached: x.reached, converted: x.converted, late: waiting.filter((w) => w.late && w.agentId === id).length };
+      return { id: AP ? AP.get(id)! : id, name: who.get(id) ?? '—', called: x.called, under5: x.under5, onTime: x.onTime, median: x.median, reached: x.reached, converted: x.converted, ...(x.ds ? { ds: x.ds } : {}), late: waiting.filter((w) => w.late && w.agentId === id).length };
     })
     .sort((a, b) => b.called - a.called || a.name.localeCompare(b.name));
   // the store's owner and administrators (not inside one of his teams): each team side by side, the load per agent
   const dir = director && !opened;
   let teams: NvTeam[] | null = null;
   let allTeams: NvTeam | null = null;
-  let perAgent: { orders: number; agents: number } | null = null;
-  let perAgentPrev: { orders: number; agents: number } | null = null;
+  let perAgent: { orders: number; agents: number; ids?: number[] } | null = null;
+  let perAgentPrev: { orders: number; agents: number; ids?: number[] } | null = null;
+  if (AP) {
+    // an agency's chief: the load too — the agency's new orders ÷ its agents who made a first call — and who they are
+    const load = (w: { a: number; b: number }) => {
+      const on = new Set(made.filter((c) => inW(w, c.at) && c.agencyId === ownA && ours(c.by)).map((c) => AP.get(c.by)!));
+      return { orders: newIn(w, (o) => o.agencyId === ownA), agents: on.size, ids: [...on] };
+    };
+    perAgent = load(W0);
+    perAgentPrev = load(W1);
+  }
   if (dir) {
     // the load: the store's own new orders ÷ its agents who made a first call (now, and yesterday at the same hour)
     const load = (w: { a: number; b: number }) => ({
@@ -746,6 +781,11 @@ async function nouvellesStats(ctx: Ctx, i: { team?: string } = {}) {
     perAgentPrev,
     teams,
     allTeams,
+    /** an agency's chief or chef d'équipe (his agency's numbers) */
+    agency: AP !== null,
+    /** « Tous les vendeurs » of an agency: each seller side by side, and all of them (fanout.ts; one store: none) */
+    sellers: null as NvTeam[] | null,
+    allSellers: null as NvTeam | null,
   };
 }
 
@@ -789,8 +829,10 @@ export interface EcAgent extends EcSum {
 }
 export interface EcTeam extends EcSum {
   key: string;
-  /** 'none': what no team has (orders with no agent, people in no team) */
-  kind: 'team' | 'agency' | 'none';
+  /** 'none': what no team has (orders with no agent, people in no team); 'seller': a seller of an agency */
+  kind: 'team' | 'agency' | 'none' | 'seller';
+  /** a seller's store id (an agency's « Par vendeur ») */
+  id?: number;
   name: string;
   /** agents who made a call today (null: an agency — its agents stay private) */
   agents: number | null;
@@ -813,6 +855,10 @@ async function enCoursStats(ctx: Ctx, i: { team?: string } = {}) {
   const director = (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) && agencyOf(ctx) === null;
   const T = director ? await getSetting(ctx.db, 'teams') : [];
   const { opened, membersOf, inView } = teamView(T, director ? i.team : undefined);
+  // an agency's chief or chef d'équipe: his agency's orders and people are his team's (AP: their ids in the agency)
+  const AP = await agencyPeople(ctx);
+  const ownA = AP ? agencyOf(ctx) : null;
+  const ours = (by: number) => !AP || AP.has(by);
   // the orders with a call or a change of their confirmation since yesterday, and each one's whole call history
   const touched = (
     await ctx.db.query(
@@ -922,20 +968,26 @@ async function enCoursStats(ctx: Ctx, i: { team?: string } = {}) {
     late: rows.filter((o) => o.late).length,
     dueHour: rows.filter((o) => o.soon).length,
   };
-  // one line per agent: the store's own agents (an agency's agents stay private: never a line here)
+  // one line per agent: the store's own agents (an agency's agents stay private: never a line here) — for an agency's
+  // chief, his agency's agents
   const who = await names(ctx.db);
-  const ownB = backs.filter((b) => inW(W0, b.at) && b.agencyId === null);
-  const ownC = closes.filter((c) => inW(W0, c.at) && c.agencyId === null && c.agentId !== null);
-  const ownLate = rows.filter((o) => o.late && o.agencyId === null && o.agentId !== null);
+  const ownB = backs.filter((b) => inW(W0, b.at) && b.agencyId === ownA && ours(b.by));
+  const ownC = closes.filter((c) => inW(W0, c.at) && c.agencyId === ownA && c.agentId !== null && ours(c.agentId));
+  const ownLate = rows.filter((o) => o.late && o.agencyId === ownA && o.agentId !== null && ours(o.agentId));
   const ids = new Set<number>([...ownB.map((b) => b.by), ...ownC.map((c) => c.agentId!), ...ownLate.map((o) => o.agentId!)]);
   const agents: EcAgent[] = [...ids]
-    .map((id) => ({ id, name: who.get(id) ?? '—', ...sumOf(ownB.filter((b) => b.by === id), ownC.filter((c) => c.agentId === id)), late: ownLate.filter((o) => o.agentId === id).length }))
+    .map((id) => ({ id: AP ? AP.get(id)! : id, name: who.get(id) ?? '—', ...sumOf(ownB.filter((b) => b.by === id), ownC.filter((c) => c.agentId === id)), late: ownLate.filter((o) => o.agentId === id).length }))
     .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name));
   // the store's owner and administrators (not inside one of his teams): each team side by side, the load per agent
   const dir = director && !opened;
   let teams: EcTeam[] | null = null;
   let allTeams: EcTeam | null = null;
-  let perAgent: { orders: number; agents: number } | null = null;
+  let perAgent: { orders: number; agents: number; ids?: number[] } | null = null;
+  if (AP) {
+    // an agency's chief: the load too — the agency's orders in progress ÷ its agents who made a call today — and who
+    const on = new Set(anyCall.filter((c) => inW(W0, c.at) && c.agencyId === ownA && ours(c.by)).map((c) => AP.get(c.by)!));
+    perAgent = { orders: rows.filter((o) => o.agencyId === ownA).length, agents: on.size, ids: [...on] };
+  }
   if (dir) {
     // active: made a call today (a first call or a call back) on the store's own orders
     const active = new Set(anyCall.filter((c) => inW(W0, c.at) && c.agencyId === null).map((c) => c.by));
@@ -1006,6 +1058,11 @@ async function enCoursStats(ctx: Ctx, i: { team?: string } = {}) {
     perAgent,
     teams,
     allTeams,
+    /** an agency's chief or chef d'équipe (his agency's numbers) */
+    agency: AP !== null,
+    /** « Tous les vendeurs » of an agency: each seller side by side, and all of them (fanout.ts; one store: none) */
+    sellers: null as EcTeam[] | null,
+    allSellers: null as EcTeam | null,
   };
 }
 
@@ -1074,7 +1131,9 @@ export interface CfSum {
 export interface CfRow extends CfSum {
   key: string;
   name: string;
-  kind?: 'team' | 'agency' | 'none';
+  kind?: 'team' | 'agency' | 'none' | 'seller';
+  /** a seller's store id (an agency's « Par vendeur ») */
+  id?: number;
   /** agents with leads (a team; null: an agency — its agents stay private) */
   agents?: number | null;
 }
@@ -1087,8 +1146,8 @@ export const CfInput = KfInput.extend({
   product: id.optional(),
   /** the store's owner: one of his teams (t<id>: its manager view) or a confirmation agency (a<id>) */
   team: z.string().max(40).optional(),
-  /** the table: per agent (per team for the owner) or per product */
-  by: z.enum(['people', 'product']).default('people'),
+  /** the table: per agent (per team for the owner) or per product — an agency's « Tous les vendeurs »: or per seller */
+  by: z.enum(['people', 'product', 'seller']).default('people'),
 });
 
 /**
@@ -1107,6 +1166,13 @@ async function confirmeesStats(ctx: Ctx, i: z.infer<typeof CfInput>) {
   const A = director ? await agencyNames(ctx) : [];
   const agency = director && i.team?.startsWith('a') ? A.find((a) => `a${a.id}` === i.team) ?? null : null;
   const { opened, membersOf, inView } = teamView(T, director && !agency ? i.team : undefined);
+  // an agency's chief or chef d'équipe: his agency's orders and people are his team's, each agent by his id in the
+  // agency (pid; the store's own people: their own id)
+  const AP = await agencyPeople(ctx);
+  const ownA = AP ? agencyOf(ctx) : null;
+  const pid = (aid: number | null) => (aid === null ? null : AP ? (AP.get(aid) ?? null) : aid);
+  // (one store: « Par vendeur » is the store itself, a line per agent)
+  const by = i.by === 'product' ? 'product' : 'people';
   const rows = await ctx.db.query(
     `SELECT id, conf_status, follow_status, agent_id, conf_agency_id, has_upsell, came FROM sales WHERE ${periodSql(i.basis, 'sales')}${statsSql(ctx, 'sales')}`,
     [isoT(R.a), isoT(R.b)],
@@ -1131,11 +1197,11 @@ async function confirmeesStats(ctx: Ctx, i: z.infer<typeof CfInput>) {
   }
   const who = await names(ctx.db);
   // the filters' choices (before the agent and product filters themselves)
-  const agentChoices = [...new Set(O.filter((o) => o.agencyId === null && o.agentId !== null).map((o) => o.agentId!))]
-    .map((aid) => ({ id: aid, name: who.get(aid) ?? '—' }))
+  const agentChoices = [...new Set(O.filter((o) => o.agencyId === ownA && o.agentId !== null && pid(o.agentId) !== null).map((o) => o.agentId!))]
+    .map((aid) => ({ id: pid(aid)!, name: who.get(aid) ?? '—' }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const prodChoices = [...new Map(O.flatMap((o) => prods.get(o.id) ?? []).map((p) => [p.id, p])).values()].sort((a, b) => a.name.localeCompare(b.name));
-  if (i.agent) O = O.filter((o) => o.agentId === i.agent);
+  if (i.agent) O = O.filter((o) => o.agentId !== null && pid(o.agentId) === i.agent);
   if (i.product) O = O.filter((o) => (prods.get(o.id) ?? []).some((p) => p.id === i.product));
   const L = O.map((o) => ({ ...o, lead: leadOf(o.status, note.get(o.id)) }));
   type Ld = (typeof L)[number];
@@ -1163,7 +1229,7 @@ async function confirmeesStats(ctx: Ctx, i: z.infer<typeof CfInput>) {
     [...new Map(L.flatMap((o) => (prods.get(o.id) ?? []).map((p) => [p.id, p] as const))).values()]
       .filter((p) => !i.product || p.id === i.product)
       .map((p) => ({ key: `p${p.id}`, name: p.name, ...sumOf(L.filter((o) => (prods.get(o.id) ?? []).some((x) => x.id === p.id))) }));
-  if (i.by === 'product' || i.agent || agency) table = productRows();
+  if (by === 'product' || i.agent || agency) table = productRows();
   else if (dir) {
     const own = L.filter((o) => o.agencyId === null);
     const inTeams = new Set<number>();
@@ -1180,17 +1246,19 @@ async function confirmeesStats(ctx: Ctx, i: z.infer<typeof CfInput>) {
     const rest = own.filter((o) => o.agentId === null || !inTeams.has(o.agentId));
     if (rest.length) table.push({ key: 'none', name: '', kind: 'none', agents: null, ...sumOf(rest) });
   } else {
-    const per = new Map<string, Ld[]>();
+    const per = new Map<string, { name: string; xs: Ld[] }>();
     for (const o of L) {
-      const k = o.agentId === null ? 'none' : `u${o.agentId}`;
-      if (!per.has(k)) per.set(k, []);
-      per.get(k)!.push(o);
+      const p = pid(o.agentId);
+      const k = p === null ? 'none' : `u${p}`;
+      if (!per.has(k)) per.set(k, { name: p === null ? '' : (who.get(o.agentId!) ?? '—'), xs: [] });
+      per.get(k)!.xs.push(o);
     }
-    table = [...per.entries()].map(([k, xs]) => ({ key: k, name: k === 'none' ? '' : who.get(Number(k.slice(1))) ?? '—', ...(k === 'none' ? { kind: 'none' as const } : {}), ...sumOf(xs) }));
+    table = [...per.entries()].map(([k, v]) => ({ key: k, name: v.name, ...(k === 'none' ? { kind: 'none' as const } : {}), ...sumOf(v.xs) }));
   }
   table.sort((a, b) => (a.kind === 'none' ? 1 : 0) - (b.kind === 'none' ? 1 : 0) || b.leads - a.leads || a.name.localeCompare(b.name));
-  // Leads/agent (the owner): his own agents with leads in the period
+  // Leads/agent (the owner): his own agents with leads in the period — an agency's chief: his agency's (and who they are)
   const ownAgents = new Set(L.filter((o) => o.agencyId === null && o.agentId !== null).map((o) => o.agentId)).size;
+  const agencyAgents = AP ? [...new Set(L.flatMap((o) => (o.agentId !== null && AP.has(o.agentId) ? [AP.get(o.agentId)!] : [])))] : [];
   return {
     director: dir,
     /** the owner's choices: his teams and the agencies (null: not the owner) */
@@ -1199,10 +1267,18 @@ async function confirmeesStats(ctx: Ctx, i: z.infer<typeof CfInput>) {
     agents: agency ? [] : agentChoices,
     products: prodChoices,
     sum: sumOf(L),
-    perAgent: director && !agency ? { leads: L.filter((o) => o.agencyId === null).length, agents: ownAgents } : null,
+    perAgent: AP
+      ? { leads: L.length, agents: agencyAgents.length, ids: agencyAgents as number[] | undefined }
+      : director && !agency
+        ? { leads: L.filter((o) => o.agencyId === null).length, agents: ownAgents, ids: undefined as number[] | undefined }
+        : null,
     reasons: [...RS.entries()].map(([code, n]) => ({ code, n })).sort((a, b) => b.n - a.n),
-    by: i.by === 'product' || i.agent || agency ? ('product' as const) : ('people' as const),
+    by: (by === 'product' || i.agent || agency ? 'product' : 'people') as 'people' | 'product' | 'seller',
     table,
+    /** an agency's chief or chef d'équipe (his agency's numbers) */
+    agency: AP !== null,
+    /** « Tous les vendeurs » of an agency: the table can be per seller too (fanout.ts; one store: no) */
+    bySeller: false,
   };
 }
 
@@ -1790,13 +1866,23 @@ export const confirmationProcs = {
   // ---- statistics (managers)
   'confirmation.firstCall': proc([...MGR], KfInput, (ctx, i) => firstCall(ctx, i)),
   /** Nouvelles › Statistiques: today only, live, no filters (the owner's design, 27 Nov 2026). */
-  'confirmation.nouvelles': proc([...MGR], z.object({ team: z.string().max(40).optional() }), (ctx, i) => nouvellesStats(ctx, i)),
+  // (an agency's chief and chefs d'équipe too, on its orders: its people have the confirmation role there — 28 Nov 2026)
+  'confirmation.nouvelles': proc([...MGR, 'confirmation'], z.object({ team: z.string().max(40).optional() }), async (ctx, i) => {
+    needStats(ctx);
+    return nouvellesStats(ctx, i);
+  }),
   'confirmation.period': proc([...MGR], KfInput, (ctx, i) => periodNew(ctx, i)),
   'confirmation.delivery': proc([...MGR], KfInput.extend({ on: z.enum(['created', 'confirmed']).default('created') }), (ctx, i) => deliveryPerf(ctx, i)),
-  'confirmation.enCours': proc([...MGR], z.object({ team: z.string().max(40).optional() }), (ctx, i) => enCoursStats(ctx, i)),
+  'confirmation.enCours': proc([...MGR, 'confirmation'], z.object({ team: z.string().max(40).optional() }), async (ctx, i) => {
+    needStats(ctx);
+    return enCoursStats(ctx, i);
+  }),
   'confirmation.confirmed': proc([...MGR], KfInput, (ctx, i) => confirmedKpis(ctx, i)),
   /** Confirmation › Statistiques: leads, Leads quality, why we lose them, upsell, speed, agents and products. */
   'confirmation.overview': proc([...MGR], KfInput, (ctx, i) => overview(ctx, i)),
-  'confirmation.confirmees': proc([...MGR], CfInput, (ctx, i) => confirmeesStats(ctx, i)),
+  'confirmation.confirmees': proc([...MGR, 'confirmation'], CfInput, async (ctx, i) => {
+    needStats(ctx);
+    return confirmeesStats(ctx, i);
+  }),
 };
 

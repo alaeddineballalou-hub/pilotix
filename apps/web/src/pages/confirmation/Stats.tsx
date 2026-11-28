@@ -5,6 +5,7 @@ import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 import { useRpc } from '../../lib/query';
+import { setSeller } from '../../lib/seller';
 import { store } from '../../lib/store';
 import { da, dec1, dur, n } from '../../lib/format';
 import { ErrorBox, Help, Icon, Kpi, Loading } from '../../ui/kit';
@@ -163,6 +164,8 @@ function NvBody({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
   const T = D.today;
   const P = D.prev;
   const dir = D.director;
+  // the load per agent: the store's owner (all his teams) and an agency's chief (his agency)
+  const wide = dir || D.agency;
   const u5 = pOf(T.under5, T.called);
   const ot = pOf(T.onTime, T.called);
   const re = pOf(T.reached, T.called);
@@ -180,9 +183,9 @@ function NvBody({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
         <span>{D.team ? t('confirmation.nv.secOne', { team: D.team.name }) : t(dir ? 'confirmation.nv.secAll' : 'confirmation.nv.secTeam')}</span>
       </div>
       <div className="px-sx-grp">
-        <Group title={t('confirmation.nv.gVolume')} size={dir ? 2 : 1} min={168}>
+        <Group title={t('confirmation.nv.gVolume')} size={wide ? 2 : 1} min={168}>
           <Tile label={t('confirmation.nv.received')} help={t('confirmation.nv.hReceived')} value={n(T.received)} gl={t(dir ? 'confirmation.nv.today' : 'confirmation.nv.cameIn')} d={<Arrow v={T.received - P.received} unit="n" />} />
-          {dir && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.nv.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} d={<Arrow v={dOf(per, load(D.perAgentPrev))} unit="n" />} />}
+          {wide && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.nv.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} d={<Arrow v={dOf(per, load(D.perAgentPrev))} unit="n" />} />}
         </Group>
         <Group title={t('confirmation.nv.gSpeed')} size={3}>
           <Tile main label={t('confirmation.nv.under5')} help={t('confirmation.nv.hUnder5')} value={pctTxt(u5)} gl={t('confirmation.nv.goal', { v: 80 })} d={<Arrow v={dOf(u5, pOf(P.under5, P.called))} unit="pts" />} />
@@ -200,13 +203,35 @@ function NvBody({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
         <Tile warn={D.live.late > 0} label={t('confirmation.nv.late')} help={t('confirmation.nv.hLate')} value={n(D.live.late)} />
         <Tile warn={D.live.noAgent > 0} label={t('confirmation.nv.noAgent')} help={t('confirmation.nv.hNoAgent')} value={n(D.live.noAgent)} />
       </div>
-      {dir ? <NvTeams D={D} onTeam={onTeam} /> : <NvAgents D={D} />}
+      {dir ? <NvTeams D={D} onTeam={onTeam} /> : <NvWho D={D} />}
     </div>
   );
 }
 
+/** « Par agent / Par vendeur »: the table of an agency's « Tous les vendeurs » (each agent once, or each seller). */
+function BySeller({ value, onChange }: { value: 'people' | 'seller'; onChange: (v: 'people' | 'seller') => void }) {
+  const { t } = useTranslation();
+  return (
+    <span className="px-sx-seg" role="radiogroup" aria-label={t('confirmation.cfs.tableSec')}>
+      {(['people', 'seller'] as const).map((b) => (
+        <button key={b} type="button" role="radio" aria-checked={value === b} className={value === b ? 'on' : ''} onClick={() => onChange(b)}>
+          {t(b === 'seller' ? 'confirmation.cfs.bySeller' : 'confirmation.cfs.byAgent')}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/** Each agent — or, in an agency's « Tous les vendeurs », each seller too (a seller opens its own numbers). */
+function NvWho({ D }: { D: Nv }) {
+  const [by, setBy] = useState<'people' | 'seller'>('people');
+  if (!D.sellers) return <NvAgents D={D} />;
+  const tools = <BySeller value={by} onChange={setBy} />;
+  return by === 'seller' ? <NvTeams D={D} sellers tools={tools} /> : <NvAgents D={D} tools={tools} />;
+}
+
 /** Each agent today: the team's numbers for each one; « Équipe » adds up every call (never an average of agents). */
-function NvAgents({ D }: { D: Nv }) {
+function NvAgents({ D, tools }: { D: Nv; tools?: ReactNode }) {
   const { t } = useTranslation();
   const A = D.agentsTotal;
   const teamRe = pOf(A.reached, A.called);
@@ -235,7 +260,10 @@ function NvAgents({ D }: { D: Nv }) {
   };
   return (
     <>
-      <div className="px-sx-sec">{t('confirmation.nv.byAgent')}</div>
+      <div className={`px-sx-sec${tools ? ' row' : ''}`}>
+        <span>{t('confirmation.nv.byAgent')}</span>
+        {tools}
+      </div>
       <div className="tbl-wrap">
         <table className="tbl px-ov-tbl px-sx-tbl">
           <thead>
@@ -276,10 +304,12 @@ function NvAgents({ D }: { D: Nv }) {
 }
 
 /** The store's owner: each team side by side (an agency is one line, its agents stay private); a team opens its manager
- *  view; « Toutes les équipes » adds the lines up. */
-function NvTeams({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
+ *  view; « Toutes les équipes » adds the lines up. An agency's « Tous les vendeurs » (`sellers`): each seller side by
+ *  side, a seller opens its own numbers (the seller picked at the top of the page). */
+function NvTeams({ D, onTeam, sellers, tools }: { D: Nv; onTeam?: (k: string | null) => void; sellers?: boolean; tools?: ReactNode }) {
   const { t } = useTranslation();
-  const rows = D.teams ?? [];
+  const rows = (sellers ? D.sellers : D.teams) ?? [];
+  const total = sellers ? D.allSellers : D.allTeams;
   const avg = D.perAgent && D.perAgent.agents > 0 ? D.perAgent.orders / D.perAgent.agents : null;
   const cols = ['cAgents', 'cNew', 'cPerAgent', 'cUnder5', 'cMedian', 'cConverted', 'cLate', 'cUnassigned'] as const;
   const head = (k: (typeof cols)[number]) => t(`confirmation.nv.${k}`);
@@ -301,14 +331,18 @@ function NvTeams({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
       <td key="x" className={`num ltr${bad((r.unassigned ?? 0) > 0)}`} data-l={head('cUnassigned')}>{r.unassigned === null ? '—' : n(r.unassigned)}</td>,
     ];
   };
+  const first = t(sellers ? 'confirmation.nv.cSeller' : 'confirmation.nv.cTeam');
   return (
     <>
-      <div className="px-sx-sec">{t('confirmation.nv.byTeam')}</div>
+      <div className={`px-sx-sec${tools ? ' row' : ''}`}>
+        <span>{t(sellers ? 'confirmation.nv.bySeller' : 'confirmation.nv.byTeam')}</span>
+        {tools}
+      </div>
       <div className="tbl-wrap">
         <table className="tbl px-ov-tbl px-sx-tbl">
           <thead>
             <tr>
-              <th>{t('confirmation.nv.cTeam')}</th>
+              <th>{first}</th>
               {cols.map((k) => (
                 <th key={k} className="num">{head(k)}</th>
               ))}
@@ -317,10 +351,10 @@ function NvTeams({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const open = r.kind === 'team';
+              const open = sellers ? r.id !== undefined : r.kind === 'team';
               return (
-                <tr key={r.key} className={open ? 'go' : undefined} onClick={open ? () => onTeam(r.key) : undefined}>
-                  <td data-l={t('confirmation.nv.cTeam')}>
+                <tr key={r.key} className={open ? 'go' : undefined} onClick={open ? () => (sellers ? setSeller(r.id!) : onTeam?.(r.key)) : undefined}>
+                  <td data-l={first}>
                     {r.kind === 'none' ? t('confirmation.cfs.noTeam') : r.name} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
                   </td>
                   {cells(r, r.kind !== 'none', r.agents ? Math.round(r.received / r.agents) : null)}
@@ -328,10 +362,10 @@ function NvTeams({ D, onTeam }: { D: Nv; onTeam: (k: string | null) => void }) {
                 </tr>
               );
             })}
-            {D.allTeams && (
+            {total && (
               <tr className="tot">
-                <td data-l={t('confirmation.nv.cTeam')}>{t('confirmation.nv.allTeams')}</td>
-                {cells(D.allTeams, false, avg === null ? null : Math.round(avg))}
+                <td data-l={first}>{t(sellers ? 'confirmation.nv.allSellers' : 'confirmation.nv.allTeams')}</td>
+                {cells(total, false, avg === null ? null : Math.round(avg))}
                 <td aria-hidden="true" />
               </tr>
             )}
@@ -379,6 +413,8 @@ function EcBody({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
   const T = D.today;
   const P = D.prev;
   const dir = D.director;
+  // the load per agent: the store's owner (all his teams) and an agency's chief (his agency)
+  const wide = dir || D.agency;
   const ot = pOf(T.onTime, T.calls);
   const re = pOf(ecReached(T), ecReached(T) + T.never);
   const tr = ecTries(T);
@@ -410,15 +446,23 @@ function EcBody({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
       <div className="px-sx-sec">{t(dir ? 'confirmation.ecs.endedAll' : 'confirmation.ecs.ended', { count: closed })}</div>
       <EcBar s={T} />
       <div className="px-sx-sec">{t(dir ? 'confirmation.nv.nowAll' : 'confirmation.nv.now')}</div>
-      <div className={dir ? 'px-sx-t4' : 'px-sx-t3'}>
+      <div className={wide ? 'px-sx-t4' : 'px-sx-t3'}>
         <Tile label={t('confirmation.ecs.inProgress')} help={t('confirmation.ecs.hInProgress')} value={n(D.live.inProgress)} gl={t('confirmation.ecs.worth', { v: da(D.live.value) })} />
-        {dir && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.ecs.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} />}
+        {wide && <Tile label={t('confirmation.nv.perAgent')} help={t('confirmation.ecs.hPerAgent')} value={per === null ? '—' : n(per)} gl={t('confirmation.nv.agents', { count: D.perAgent?.agents ?? 0 })} />}
         <Tile warn={D.live.late > 0} label={t('confirmation.ecs.late')} help={t('confirmation.ecs.hLate')} value={n(D.live.late)} />
         <Tile label={t('confirmation.ecs.dueHour')} help={t('confirmation.ecs.hDueHour')} value={n(D.live.dueHour)} />
       </div>
-      {dir ? <EcTeams D={D} onTeam={onTeam} /> : <EcAgents D={D} />}
+      {dir ? <EcTeams D={D} onTeam={onTeam} /> : <EcWho D={D} />}
     </div>
   );
+}
+
+/** Each agent — or, in an agency's « Tous les vendeurs », each seller too (a seller opens its own numbers). */
+function EcWho({ D }: { D: Ec }) {
+  const [by, setBy] = useState<'people' | 'seller'>('people');
+  if (!D.sellers) return <EcAgents D={D} />;
+  const tools = <BySeller value={by} onChange={setBy} />;
+  return by === 'seller' ? <EcTeams D={D} sellers tools={tools} /> : <EcAgents D={D} tools={tools} />;
 }
 
 /** How today's closed orders ended: confirmed and « the client said no » (both reached), never reached. */
@@ -454,7 +498,7 @@ function EcBar({ s }: { s: EcS }) {
 }
 
 /** Each agent today; « Équipe » adds up the lines (never an average of agents). */
-function EcAgents({ D }: { D: Ec }) {
+function EcAgents({ D, tools }: { D: Ec; tools?: ReactNode }) {
   const { t } = useTranslation();
   const cols = ['cCalls', 'cOnTime', 'cLate', 'cReached', 'cTries'] as const;
   const head = (k: (typeof cols)[number]) => t(`confirmation.ecs.${k}`);
@@ -473,7 +517,10 @@ function EcAgents({ D }: { D: Ec }) {
   };
   return (
     <>
-      <div className="px-sx-sec">{t('confirmation.nv.byAgent')}</div>
+      <div className={`px-sx-sec${tools ? ' row' : ''}`}>
+        <span>{t('confirmation.nv.byAgent')}</span>
+        {tools}
+      </div>
       <div className="tbl-wrap">
         <table className="tbl px-ov-tbl px-sx-tbl">
           <thead>
@@ -515,9 +562,10 @@ function EcAgents({ D }: { D: Ec }) {
 
 /** The store's owner: each team side by side (an agency is one line, its agents private); a team opens its manager
  *  view; « Toutes les équipes » adds the lines up. */
-function EcTeams({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
+function EcTeams({ D, onTeam, sellers, tools }: { D: Ec; onTeam?: (k: string | null) => void; sellers?: boolean; tools?: ReactNode }) {
   const { t } = useTranslation();
-  const rows = D.teams ?? [];
+  const rows = (sellers ? D.sellers : D.teams) ?? [];
+  const total = sellers ? D.allSellers : D.allTeams;
   const avg = D.perAgent && D.perAgent.agents > 0 ? D.perAgent.orders / D.perAgent.agents : null;
   const cols = ['cAgents', 'cInProgress', 'cPerAgent', 'cOnTime', 'cLate', 'cReached', 'cTriesShort'] as const;
   const head = (k: (typeof cols)[number]) => t(k === 'cAgents' || k === 'cPerAgent' ? `confirmation.nv.${k}` : `confirmation.ecs.${k}`);
@@ -540,14 +588,18 @@ function EcTeams({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
       <td key="t" className="num ltr" data-l={head('cTriesShort')}>{tr === null ? '—' : dec1(tr)}</td>,
     ];
   };
+  const first = t(sellers ? 'confirmation.nv.cSeller' : 'confirmation.nv.cTeam');
   return (
     <>
-      <div className="px-sx-sec">{t('confirmation.nv.byTeam')}</div>
+      <div className={`px-sx-sec${tools ? ' row' : ''}`}>
+        <span>{t(sellers ? 'confirmation.nv.bySeller' : 'confirmation.nv.byTeam')}</span>
+        {tools}
+      </div>
       <div className="tbl-wrap">
         <table className="tbl px-ov-tbl px-sx-tbl">
           <thead>
             <tr>
-              <th>{t('confirmation.nv.cTeam')}</th>
+              <th>{first}</th>
               {cols.map((k) => (
                 <th key={k} className="num">{head(k)}</th>
               ))}
@@ -556,10 +608,10 @@ function EcTeams({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const go = r.kind === 'team';
+              const go = sellers ? r.id !== undefined : r.kind === 'team';
               return (
-                <tr key={r.key} className={go ? 'go' : undefined} onClick={go ? () => onTeam(r.key) : undefined}>
-                  <td data-l={t('confirmation.nv.cTeam')}>
+                <tr key={r.key} className={go ? 'go' : undefined} onClick={go ? () => (sellers ? setSeller(r.id!) : onTeam?.(r.key)) : undefined}>
+                  <td data-l={first}>
                     {r.kind === 'none' ? t('confirmation.cfs.noTeam') : r.name} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
                   </td>
                   {cells(r, r.kind !== 'none', r.agents ? Math.round(r.inProgress / r.agents) : null)}
@@ -567,10 +619,10 @@ function EcTeams({ D, onTeam }: { D: Ec; onTeam: (k: string | null) => void }) {
                 </tr>
               );
             })}
-            {D.allTeams && (
+            {total && (
               <tr className="tot">
-                <td data-l={t('confirmation.nv.cTeam')}>{t('confirmation.nv.allTeams')}</td>
-                {cells(D.allTeams, false, avg === null ? null : Math.round(avg))}
+                <td data-l={first}>{t(sellers ? 'confirmation.nv.allSellers' : 'confirmation.nv.allTeams')}</td>
+                {cells(total, false, avg === null ? null : Math.round(avg))}
                 <td aria-hidden="true" />
               </tr>
             )}
@@ -1286,7 +1338,8 @@ interface CfF {
   agent: number | null;
   product: number | null;
   team: string | null;
-  by: 'people' | 'product';
+  /** 'seller': an agency's « Tous les vendeurs » only (one seller: per agent) */
+  by: 'people' | 'product' | 'seller';
 }
 // the dates, the date type and the table's choice are kept on this device; the agent, product and team filters are not
 const loadCf = (): CfF => {
@@ -1364,7 +1417,7 @@ function CfFilters({ f, setF, D }: { f: CfF; setF: (p: Partial<CfF>) => void; D:
           ))}
         </select>
       )}
-      {D && (
+      {D && (D.products.length > 0 || f.product) && (
         <select aria-label={t('confirmation.cfs.product')} className="px-sx-pill" value={f.product ?? ''} onChange={(e) => setF({ product: e.target.value ? Number(e.target.value) : null })}>
           <option value="">{t('confirmation.cfs.productAll')}</option>
           {D.products.map((p) => (
@@ -1432,10 +1485,12 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
   const S = D.sum;
   const prodOnly = !!f.agent || D.team?.key.startsWith('a');
   const people = D.by === 'people';
-  const dir = D.director && people;
+  // an agency's « Tous les vendeurs »: per seller too (a seller opens its own numbers)
+  const sel = D.by === 'seller';
+  const dir = (D.director && people) || sel;
   const cols = [...(dir ? (['cAgents'] as const) : []), 'cLeads', ...(dir ? (['cPerAgent'] as const) : []), 'cQualified', 'cConfirmed', 'cQuality', 'cTaux', 'cUpsell', 'cLivr', 'cFinal'] as const;
   const head = (k: (typeof cols)[number]) => t(`confirmation.cfs.${k}`);
-  const first = people ? t(D.director ? 'confirmation.nv.cTeam' : 'confirmation.nv.cAgent') : t('confirmation.cfs.cProduct');
+  const first = sel ? t('confirmation.nv.cSeller') : people ? t(D.director ? 'confirmation.nv.cTeam' : 'confirmation.nv.cAgent') : t('confirmation.cfs.cProduct');
   // red: under the team (the total line): lead quality 5 pts, upsell half, taux livr. 10 pts — a line with few leads is not judged
   const tq = cfQual(S);
   const tu = cfUp(S);
@@ -1465,16 +1520,16 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
     ];
   };
   const name = (r: Cf['table'][number]) => (r.kind === 'none' ? t(D.director && people ? 'confirmation.cfs.noTeam' : 'confirmation.cfs.noAgent') : r.name);
-  const total = D.team ? D.team.name : t(D.director ? 'confirmation.nv.allTeams' : 'confirmation.nv.teamRow');
+  const total = D.team ? D.team.name : t(sel ? 'confirmation.nv.allSellers' : D.director ? 'confirmation.nv.allTeams' : 'confirmation.nv.teamRow');
   return (
     <>
       <div className="px-sx-sec row">
         <span>{t('confirmation.cfs.tableSec')}</span>
         {!prodOnly && (
           <span className="px-sx-seg" role="radiogroup" aria-label={t('confirmation.cfs.tableSec')}>
-            {(['people', 'product'] as const).map((b) => (
+            {(D.bySeller ? (['people', 'product', 'seller'] as const) : (['people', 'product'] as const)).map((b) => (
               <button key={b} type="button" role="radio" aria-checked={D.by === b} className={D.by === b ? 'on' : ''} onClick={() => setF({ by: b })}>
-                {t(b === 'product' ? 'confirmation.cfs.byProduct' : D.director ? 'confirmation.cfs.byTeam' : 'confirmation.cfs.byAgent')}
+                {t(b === 'seller' ? 'confirmation.cfs.bySeller' : b === 'product' ? 'confirmation.cfs.byProduct' : D.director ? 'confirmation.cfs.byTeam' : 'confirmation.cfs.byAgent')}
               </button>
             ))}
           </span>
@@ -1498,13 +1553,13 @@ function CfTable({ D, f, setF }: { D: Cf; f: CfF; setF: (p: Partial<CfF>) => voi
             {D.table.length ? (
               D.table.map((r) => {
                 const few = r.leads < 20;
-                const go = dir && r.kind === 'team';
+                const go = (dir && r.kind === 'team') || (sel && r.id !== undefined);
                 return (
                   <tr
                     key={r.key}
                     className={[few ? 'few' : '', go ? 'go' : ''].filter(Boolean).join(' ') || undefined}
                     title={few ? t('confirmation.cfs.few') : undefined}
-                    onClick={go ? () => setF({ team: r.key, agent: null }) : undefined}
+                    onClick={go ? () => (sel ? setSeller(r.id!) : setF({ team: r.key, agent: null })) : undefined}
                   >
                     <td data-l={first}>
                       {name(r)} {r.kind === 'agency' && <span className="badge t-warn">{t('confirmation.nv.agency')}</span>}
