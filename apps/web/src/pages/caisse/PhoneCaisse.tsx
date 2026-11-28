@@ -812,7 +812,7 @@ function QuickPay({ companyId, kind, onOpen, full }: { companyId: number; kind: 
           <u>{t('caisse.ux.edit')}</u>
         </button>
       ) : (
-        <div className="pxk-askrow">
+        <div className={`pxk-askrow${other || d.firstIn > 1 ? ' long' : ''}`}>
           <button type="button" className="pxv-btn gr pxk-qpask" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: other ? date || min : undefined })}>
             <Icon name="coins" /> {t('caisse.pay.ask')}
           </button>

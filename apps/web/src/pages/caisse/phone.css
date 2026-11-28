@@ -215,6 +215,14 @@
 .pxk-askrow { display: flex; align-items: center; gap: 8px; }
 .pxk-askrow .pxk-qpask { flex: 1; height: 46px; font-size: 15px !important; }
 .pxk-qplink { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 12px; line-height: 1.2; }
+/* a narrow card with a long right side (« Pour après-demain » from 14:00, or the calendar of « autre date »): it goes
+   under the button, so « Demander le paiement » stays on one line (it was cut into 3 lines next to the calendar) */
+@media (max-width: 900px) {
+  .pxk-askrow.long { flex-wrap: wrap; row-gap: 6px; }
+  .pxk-askrow.long .pxk-qpask { flex-basis: 100%; }
+  .pxk-askrow.long .pxk-qplink { flex-direction: row; gap: 6px; margin-inline-start: auto; }
+  .pxk-askrow.long .pxk-date { flex: 1 1 100%; }
+}
 .pxk-date { height: 44px; border-radius: 12px; border: 1px solid var(--line); padding: 0 10px; font: inherit; color: var(--ink); background: var(--surface); }
 .pxk-reqa { flex-direction: column; align-items: stretch; gap: 8px; }
 
