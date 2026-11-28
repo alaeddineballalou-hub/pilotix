@@ -959,22 +959,15 @@ function PayTake({ p, into: into0, onClose }: { p: Pay; into: string; onClose: (
 
 function PayConfig({ companyId, cfg, help, onClose }: { companyId: number; cfg: { auto: boolean; into: string }; help: string; onClose: () => void }) {
   const { t } = useTranslation();
-  const [auto, setAuto] = useState(cfg.auto);
   const [into, setInto] = useState(cfg.into);
   const save = useAction('caisse.payConfig', { success: t('common.saved', { defaultValue: 'OK' }), onDone: onClose });
   return (
     <Sheet title={t('caisse.pay.settings')} onClose={onClose}>
+      {/* Pilotix never asks for the payment by itself (the owner, 28 Nov 2026): no switch, only the caisse */}
       <p className="pxv-help">{help}</p>
-      <label className="pxk-tog">
-        <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-        <span>
-          <b>{t('caisse.pay.autoLabel')}</b>
-          <small>{t('caisse.pay.autoHelp')}</small>
-        </span>
-      </label>
       <div className="pxv-lbl">{t('caisse.pay.intoLabel')}</div>
       <IntoChips value={into} onChange={setInto} />
-      <button type="button" className="pxv-btn nv big" disabled={save.isPending} onClick={() => save.mutate({ companyId, auto, into: into as 'main' })}>
+      <button type="button" className="pxv-btn nv big" disabled={save.isPending} onClick={() => save.mutate({ companyId, auto: false, into: into as 'main' })}>
         {t('caisse.pay.save')}
       </button>
     </Sheet>

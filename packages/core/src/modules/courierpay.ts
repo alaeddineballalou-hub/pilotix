@@ -20,14 +20,16 @@ const parse = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? {});
 const tomorrow = (now: number) => new Date(now + 3_600_000 + 86_400_000).toISOString().slice(0, 10);
 
 export interface PayCfg {
-  /** ask for the payment by itself (default on) */
+  /** ask for the payment by itself: never any more (the owner, 28 Nov 2026: « Pilotix sends 0 request de payment » —
+   *  4 requests for the same day went to ZR, each one as soon as ZR validated the one before). The shop asks by hand
+   *  (« Demander le paiement »); the payments ZR makes still come into the caisse by themselves. */
   auto: boolean;
   /** caisse the payments go into */
   into: string;
 }
 const cfgOf = (config: unknown): PayCfg => {
   const p = (parse(config) as any).pay ?? {};
-  return { auto: p.auto !== false, into: typeof p.into === 'string' && CAISSE_KEY_RE.test(p.into) ? p.into : 'main' };
+  return { auto: false, into: typeof p.into === 'string' && CAISSE_KEY_RE.test(p.into) ? p.into : 'main' };
 };
 
 async function company(ctx: Ctx, id: number) {
@@ -375,9 +377,10 @@ export const courierPayProcs = {
   }),
 
   /** Ask by itself + the caisse the payments go into. */
-  'caisse.payConfig': proc([], z.object({ companyId: id, auto: z.boolean(), into: CaisseKey }), async (ctx, i) => {
+  'caisse.payConfig': proc([], z.object({ companyId: id, auto: z.boolean().optional(), into: CaisseKey }), async (ctx, i) => {
     await checkCaisse(ctx.db, i.into);
-    await ctx.db.query(`UPDATE delivery_companies SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{pay}', $2::jsonb) WHERE id = $1`, [i.companyId, JSON.stringify({ auto: i.auto, into: i.into })]);
+    // Pilotix never asks by itself (PayCfg): an old screen's « auto » is not kept
+    await ctx.db.query(`UPDATE delivery_companies SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{pay}', $2::jsonb) WHERE id = $1`, [i.companyId, JSON.stringify({ auto: false, into: i.into })]);
     return { ok: true };
   }),
 };

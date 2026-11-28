@@ -681,7 +681,6 @@ function PayTake({ p, into: into0, onClose }: { p: Pay; into: string; onClose: (
 
 function PayConfig({ companyId, cfg, onClose }: { companyId: number; cfg: { auto: boolean; into: string }; onClose: () => void }) {
   const { t } = useTranslation();
-  const [auto, setAuto] = useState(cfg.auto);
   const [into, setInto] = useState(cfg.into);
   const save = useAction('caisse.payConfig', { success: t('common.saved', { defaultValue: 'OK' }), onDone: onClose });
   return (
@@ -693,19 +692,13 @@ function PayConfig({ companyId, cfg, onClose }: { companyId: number; cfg: { auto
           <button className="btn" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ companyId, auto, into: into as 'main' })}>
+          <button className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ companyId, auto: false, into: into as 'main' })}>
             {t('caisse.pay.save')}
           </button>
         </>
       }
     >
-      <label className="pxc-tog">
-        <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-        <span>
-          <b>{t('caisse.pay.autoLabel')}</b>
-          <small className="muted">{t('caisse.pay.autoHelp')}</small>
-        </span>
-      </label>
+      {/* Pilotix never asks for the payment by itself (the owner, 28 Nov 2026): no switch, only the caisse */}
       <CaisseSelect value={into} onChange={setInto} label={t('caisse.pay.intoLabel')} />
     </Modal>
   );
