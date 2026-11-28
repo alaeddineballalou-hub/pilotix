@@ -14,7 +14,7 @@ The next run applies it.
 - Holds: —
 - Why it needs you: nonstop runs spend your Claude usage.
 - Options: A) every 2 hours, 07:00–23:00, max 90 min per run (recommended)  B) every hour, 24/7
-- Answer: A (set at setup, 28 Nov 2026 — change any time)
+- Answer: changed 28 Nov 2026 by the owner — **nonstop**: a run starts every 30 minutes, 24/7; a run that finds the lock busy stops at once, so runs follow each other back to back. Each run still works at most 90 minutes on one task.
 
 ### D2 — Backup for the restore rehearsal
 - Status: open
