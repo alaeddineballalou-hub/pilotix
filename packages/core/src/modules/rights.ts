@@ -280,6 +280,8 @@ export const PROC_RIGHTS: Record<string, Need> = {
   'confirmation.list': (i) => (typeof i.sub === 'string' ? (i.sub === 'livrees' ? 'tab:commandes/livrees' : `tab:confirmation/${i.sub}`) : null),
   // Suivi
   'suivi.list': (i) => suiviTab(i.tab),
+  'suivi.statsOn': 'tab:suivi/stats',
+  'suivi.stats': 'tab:suivi/stats',
   'suivi.treat': 'act:suivi.treat',
   'suivi.callResult': 'act:suivi.treat',
   'suivi.resolve': 'act:suivi.treat',
